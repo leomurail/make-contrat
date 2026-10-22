@@ -7,12 +7,19 @@ interface Props {
   onChange: (key: string, value: string) => void
   /** Valeurs proposées en autocomplétion, par clé de champ. */
   suggestions?: Record<string, string[]>
+  /** Index du groupe à afficher (si mode par étapes). */
+  activeGroupIndex?: number
 }
 
-export function DocForm({ groups, data, onChange, suggestions = {} }: Props) {
+export function DocForm({ groups, data, onChange, suggestions = {}, activeGroupIndex }: Props) {
+  const displayedGroups =
+    activeGroupIndex !== undefined && groups[activeGroupIndex]
+      ? [groups[activeGroupIndex]]
+      : groups
+
   return (
     <form className="form" onSubmit={(e) => e.preventDefault()}>
-      {groups.map((group) => (
+      {displayedGroups.map((group) => (
         <fieldset key={group.title} className="group">
           <legend>{group.title}</legend>
           {group.fields.map((field) => (

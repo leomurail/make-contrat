@@ -435,7 +435,12 @@ export function ContratCession({ data }: Props) {
     data.remunerationType.includes('gracieux') ||
     data.remunerationType.includes('gratuit')
   const dateStr = formatDate(data.dateSignature) || data.dateSignature
-  const numContrat = data.numero ? `CTR-${data.numero}` : 'Brouillon'
+  const hasValidNum = Boolean(data.numero && data.numero.trim() !== '' && data.numero !== '…')
+  const numContrat = hasValidNum
+    ? data.numero.startsWith('CTR-')
+      ? data.numero
+      : `CTR-${data.numero}`
+    : 'Brouillon'
 
   return (
     <Document>
