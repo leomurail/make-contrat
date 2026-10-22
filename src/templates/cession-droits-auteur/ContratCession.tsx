@@ -150,7 +150,6 @@ const s = StyleSheet.create({
   },
   partyConclusion: {
     fontSize: 8,
-    fontStyle: 'italic',
     color: c.muted,
     marginTop: 4,
   },
@@ -160,7 +159,6 @@ const s = StyleSheet.create({
     color: c.muted,
     marginBottom: 14,
     textAlign: 'center',
-    fontStyle: 'italic',
   },
 
   // Préambule et Articles
@@ -266,7 +264,6 @@ const s = StyleSheet.create({
   mentionManuscrite: {
     fontSize: 8,
     color: c.muted,
-    fontStyle: 'italic',
     marginBottom: 6,
   },
   signatureArea: {

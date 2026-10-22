@@ -10,8 +10,10 @@ Font.register({
   family: BRAND_FONT,
   fonts: [
     { src: regular, fontWeight: 400 },
+    { src: regular, fontWeight: 400, fontStyle: 'italic' },
     { src: medium, fontWeight: 500 },
     { src: bold, fontWeight: 700 },
+    { src: bold, fontWeight: 700, fontStyle: 'italic' },
   ],
 })
 
