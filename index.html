@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Make Contrat</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script>
+      // Dernier filet : si le script de l'app plante avant que React ne prenne la main
+      // (navigateur trop ancien, fichier bloqué…), afficher l'erreur plutôt qu'une page blanche.
+      (function () {
+        function show(msg) {
+          var root = document.getElementById('root')
+          if (!root || root.children.length) return
+          root.innerHTML =
+            '<div style="padding:24px;font-family:system-ui,sans-serif;max-width:640px">' +
+            "<h1 style=\"font-size:18px\">L'application n'a pas pu démarrer.</h1>" +
+            "<p>Mets à jour ton navigateur puis recharge la page. Si l'erreur revient, envoie une capture de cet écran.</p>" +
+            '<pre style="white-space:pre-wrap;font-size:12px"></pre>' +
+            '<button type="button" onclick="location.reload()">Recharger</button></div>'
+          root.querySelector('pre').textContent = String(msg) + '\n\n' + navigator.userAgent
+        }
+        // On mémorise la dernière erreur sans l'afficher tout de suite : sur un vieux navigateur,
+        // Vite provoque exprès une erreur de détection avant de charger la version compatible.
+        var lastError = ''
+        window.addEventListener('error', function (e) { lastError = e.message || String(e.error) })
+        window.addEventListener('unhandledrejection', function (e) { lastError = String(e.reason) })
+        function check() { show(lastError || "Délai dépassé : le script de l'application ne s'est pas chargé.") }
+        window.addEventListener('load', function () { setTimeout(check, 8000) })
+        setTimeout(check, 20000)
+      })()
+    </script>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

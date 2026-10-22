@@ -1,0 +1,3 @@
+allowBuilds:
+  # Le script de core-js n'affiche qu'un message : inutile de l'exécuter.
+  core-js: false
