@@ -5,39 +5,32 @@ export interface ContratCessionData extends DocData {
   numero: string
   dateSignature: string
   villeSignature: string
-  nombreExemplaires: string
 
-  // Auteur (Le Cédant)
+  // Auteur (Le Photographe / Cédant)
   auteurNom: string
   auteurInstagram: string
-  auteurAdresse: string
-  auteurStatut: string
-  auteurSiret: string
-  auteurTelephone: string
   auteurEmail: string
+  auteurAdresse: string
   auteurSignature: string
 
-  // Cessionnaire
+  // Cessionnaire (Le Bénéficiaire)
   cessionnaireDenomination: string
-  cessionnaireForme: string
-  cessionnaireCapital: string
+  cessionnaireRepresentant: string
   cessionnaireAdresse: string
   cessionnaireRcs: string
-  cessionnaireRepresentant: string
-  cessionnaireTelephone: string
   cessionnaireEmail: string
   cessionnaireSignature: string
 
   // Périmètre & Exploitation
+  supportsAutorises: string
   siteUrlPrincipale: string
-  siteUrlSecondaire: string
+  reseauxSociauxCessionnaire: string
   dureeAnnees: string
-  dureeLettres: string
   remunerationType: string
   remunerationMontant: string
   garantieDroitImage: string
 
-  // Annexe 1
+  // Œuvres cédées & Annexe
   annexePublications: string
   annexeImage: string
 }

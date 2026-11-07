@@ -18,14 +18,45 @@ export function parseSeq(value: string | undefined): number | null {
 
 /** Plus grand numéro déjà émis pour ce modèle cette année-là (0 s'il n'y en a pas), affiché comme repère. */
 export async function lastNumber(templateId: string, year: string): Promise<number> {
-  const docs = await db.documents.where('templateId').equals(templateId).toArray()
-  return docs
-    .filter((d) => d.numero.startsWith(`${year}-`))
-    .reduce((max, d) => Math.max(max, Number(d.numero.slice(year.length + 1)) || 0), 0)
+  const [docs, contracts] = await Promise.all([
+    db.documents.where('templateId').equals(templateId).toArray().catch(() => []),
+    db.contracts.where('templateId').equals(templateId).toArray().catch(() => []),
+  ])
+
+  let maxNum = 0
+  for (const d of docs) {
+    if (d.numero.startsWith(`${year}-`)) {
+      maxNum = Math.max(maxNum, Number(d.numero.slice(year.length + 1)) || 0)
+    }
+  }
+  for (const c of contracts) {
+    if (c.numero && c.numero.startsWith(`${year}-`)) {
+      maxNum = Math.max(maxNum, Number(c.numero.slice(year.length + 1)) || 0)
+    }
+  }
+  return maxNum
 }
 
 function imageKeys(template: DocTemplate): string[] {
-  return template.groups.flatMap((g) => g.fields).filter((f) => f.type === 'image').map((f) => f.key)
+  return [
+    ...new Set([
+      ...template.groups
+        .flatMap((g) => g.fields)
+        .filter((f) => f.type === 'image' || f.type === 'signature')
+        .map((f) => f.key),
+      'annexeImage',
+      'cessionnaireSignature',
+      'auteurSignature',
+    ]),
+  ]
+}
+
+async function storeSingleAsset(src: string, assets: Asset[]): Promise<string> {
+  if (!src) return ''
+  const dataUrl = await toDataUrl(src)
+  const hash = await sha256(dataUrl)
+  assets.push({ hash, dataUrl })
+  return ASSET_PREFIX + hash
 }
 
 async function toDataUrl(src: string): Promise<string> {
@@ -61,11 +92,28 @@ export async function issueDocument(template: DocTemplate, draft: DocData): Prom
   // IndexedDB valide une transaction dès qu'on attend une promesse qui ne vient pas de Dexie.
   const assets: Asset[] = []
   for (const key of imageKeys(template)) {
-    if (!data[key]) continue
-    const dataUrl = await toDataUrl(data[key])
-    const hash = await sha256(dataUrl)
-    assets.push({ hash, dataUrl })
-    data[key] = ASSET_PREFIX + hash
+    const val = data[key]
+    if (!val) continue
+    if (val.trim().startsWith('[')) {
+      try {
+        const arr = JSON.parse(val)
+        if (Array.isArray(arr)) {
+          const refs: unknown[] = []
+          for (const item of arr) {
+            if (typeof item === 'string' && item) {
+              refs.push(await storeSingleAsset(item, assets))
+            } else if (item && typeof item === 'object' && typeof item.src === 'string' && item.src) {
+              refs.push({ ...item, src: await storeSingleAsset(item.src, assets) })
+            }
+          }
+          data[key] = JSON.stringify(refs)
+          continue
+        }
+      } catch {
+        // fallback single
+      }
+    }
+    data[key] = await storeSingleAsset(val, assets)
   }
 
   return db.transaction('rw', db.documents, db.assets, async () => {
@@ -90,6 +138,32 @@ export async function resolveData(data: DocData): Promise<DocData> {
   for (const [key, value] of Object.entries(out)) {
     if (value.startsWith(ASSET_PREFIX)) {
       out[key] = (await db.assets.get(value.slice(ASSET_PREFIX.length)))?.dataUrl ?? ''
+    } else if (value.trim().startsWith('[')) {
+      try {
+        const arr = JSON.parse(value)
+        if (Array.isArray(arr)) {
+          const resolved: unknown[] = []
+          for (const item of arr) {
+            if (typeof item === 'string' && item.startsWith(ASSET_PREFIX)) {
+              const url = (await db.assets.get(item.slice(ASSET_PREFIX.length)))?.dataUrl
+              if (url) resolved.push(url)
+            } else if (
+              item &&
+              typeof item === 'object' &&
+              typeof item.src === 'string' &&
+              item.src.startsWith(ASSET_PREFIX)
+            ) {
+              const url = (await db.assets.get(item.src.slice(ASSET_PREFIX.length)))?.dataUrl
+              if (url) resolved.push({ ...item, src: url })
+            } else {
+              resolved.push(item)
+            }
+          }
+          out[key] = JSON.stringify(resolved)
+        }
+      } catch {
+        // ignore
+      }
     }
   }
   return out
@@ -99,9 +173,10 @@ export async function resolveData(data: DocData): Promise<DocData> {
 
 interface Backup {
   app: 'make-contrat' | 'make-doc'
-  version: 1
+  version: 1 | 2
   exportedAt: string
   documents: StoredDocument[]
+  contracts?: any[]
   counters: Counter[]
   assets: Asset[]
 }
@@ -109,13 +184,14 @@ interface Backup {
 export async function exportBackup(): Promise<Blob> {
   const backup: Backup = {
     app: 'make-contrat',
-    version: 1,
+    version: 2,
     exportedAt: new Date().toISOString(),
     documents: await db.documents.toArray(),
+    contracts: await db.contracts.toArray(),
     counters: await db.counters.toArray(),
     assets: await db.assets.toArray(),
   }
-  return new Blob([JSON.stringify(backup)], { type: 'application/json' })
+  return new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' })
 }
 
 /** Fusionne une sauvegarde dans la base. Tout ou rien : en cas d'erreur, rien n'est modifié. */
@@ -126,18 +202,21 @@ export async function importBackup(file: File): Promise<number> {
   } catch {
     throw new Error("Ce fichier n'est pas une sauvegarde valide.")
   }
-  if ((backup?.app !== 'make-contrat' && backup?.app !== 'make-doc') || backup.version !== 1 || !Array.isArray(backup.documents)) {
+  if ((backup?.app !== 'make-contrat' && backup?.app !== 'make-doc') || !Array.isArray(backup.documents)) {
     throw new Error("Ce fichier n'est pas une sauvegarde Make Contrat.")
   }
 
-  await db.transaction('rw', db.documents, db.counters, db.assets, async () => {
+  await db.transaction('rw', db.documents, db.contracts, db.counters, db.assets, async () => {
     await db.assets.bulkPut(backup.assets ?? [])
     await db.documents.bulkPut(backup.documents)
+    if (Array.isArray(backup.contracts) && backup.contracts.length > 0) {
+      await db.contracts.bulkPut(backup.contracts)
+    }
     // Un compteur ne recule jamais : on garde le plus grand des deux.
     for (const c of backup.counters ?? []) {
       const current = (await db.counters.get(c.key))?.value ?? 0
       await db.counters.put({ key: c.key, value: Math.max(current, c.value) })
     }
   })
-  return backup.documents.length
+  return (backup.contracts?.length ?? 0) + backup.documents.length
 }

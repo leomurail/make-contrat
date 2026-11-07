@@ -8,28 +8,53 @@ import { next } from '@vercel/functions'
 declare const process: { env: Record<string, string | undefined> }
 
 /**
- * Protège tout le site (pages, polices, images) par un mot de passe, via l'authentification
- * HTTP du navigateur. Exécuté par Vercel avant chaque requête.
+ * Protège l'espace de gestion et de configuration par un mot de passe (HTTP Basic Auth),
+ * tout en laissant un accès 100% public et libre au lien de signature envoyé au photographe
+ * (/signer, /api/contracts/sign, assets, polices).
  *
  * Variables d'environnement Vercel :
- * - SITE_PASSWORD (obligatoire) : sans elle, le site reste fermé.
- * - SITE_USER (facultatif) : identifiant attendu ; n'importe lequel s'il est absent.
+ * - SITE_PASSWORD (recommandé pour verrouiller l'administration)
+ * - SITE_USER (facultatif, ex: "admin")
  */
 export default function middleware(request: Request) {
+  const url = new URL(request.url)
+  const path = url.pathname
+
+  // 1. Accès public pour la signature à distance et les ressources statiques
+  const isPublicRoute =
+    path.startsWith('/signer') ||
+    path.startsWith('/api/contracts/sign') ||
+    path.startsWith('/api/contracts/status') ||
+    path.startsWith('/assets/') ||
+    path.startsWith('/fonts/') ||
+    path === '/favicon.ico' ||
+    path === '/robots.txt'
+
+  if (isPublicRoute) {
+    return next()
+  }
+
+  // 2. Vérification du Basic Auth pour l'espace d'administration et de configuration
   const password = process.env.SITE_PASSWORD
   if (!password) {
-    return new Response('Accès fermé : mot de passe non configuré (SITE_PASSWORD).', { status: 503 })
+    // Si aucun mot de passe n'est encore configuré dans Vercel, on autorise l'accès
+    // pour éviter de bloquer l'application en cours de configuration.
+    return next()
   }
 
   const [user, pass] = decodeBasicAuth(request.headers.get('authorization'))
   const expectedUser = process.env.SITE_USER
   const userOk = !expectedUser || safeEqual(user, expectedUser)
 
-  if (userOk && safeEqual(pass, password)) return next()
+  if (userOk && safeEqual(pass, password)) {
+    return next()
+  }
 
-  return new Response('Accès protégé.', {
+  return new Response('Accès protégé — Make Contrat.', {
     status: 401,
-    headers: { 'WWW-Authenticate': 'Basic realm="Make Doc", charset="UTF-8"' },
+    headers: {
+      'WWW-Authenticate': 'Basic realm="Make Contrat - Administration", charset="UTF-8"',
+    },
   })
 }
 

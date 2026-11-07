@@ -1,374 +1,262 @@
 import { pdf } from '@react-pdf/renderer'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { useEffect, useMemo, useState } from 'react'
-import { DocForm } from './components/DocForm'
-import { ErrorBoundary } from './components/ErrorBoundary'
-import { History } from './components/History'
-import { PdfPreview } from './components/PdfPreview'
-import { StepWizard } from './components/StepWizard'
-import { formatNumber, issueDocument, lastNumber, parseSeq, resolveData, yearOf } from './lib/archive'
-import { db, type StoredDocument } from './lib/db'
+import { useState, useEffect } from 'react'
+import { ContractsDashboard } from './components/ContractsDashboard'
+import { StandardWorkflow } from './components/StandardWorkflow'
+import { PublicSignPage } from './components/PublicSignPage'
+import {
+  createNewContract,
+  deleteContract,
+  duplicateContract,
+  saveContract,
+} from './lib/contracts'
+import { exportBackup, importBackup, resolveData } from './lib/archive'
+import { db, type ContractItem } from './lib/db'
 import { saveBlob } from './lib/download'
-import { clearData, loadData, saveData } from './lib/storage'
+import { todayIso } from './lib/format'
+import { checkRemoteContractStatus } from './lib/remoteSigning'
 import type { DocData, DocTemplate } from './lib/types'
 import { templates } from './templates'
 
-type View = 'editor' | 'history'
-type LayoutMode = 'wizard' | 'split'
-
 async function renderPdf(template: DocTemplate, data: DocData): Promise<void> {
   const Doc = template.Document
-  saveBlob(await pdf(<Doc data={data} />).toBlob(), template.fileName(data))
+  const resolved = await resolveData(data)
+  saveBlob(await pdf(<Doc data={resolved} />).toBlob(), template.fileName(resolved))
+}
+
+async function renderDocx(template: DocTemplate, data: DocData): Promise<void> {
+  if (!template.generateDocx) throw new Error('Export Word non disponible pour ce modèle.')
+  const resolved = await resolveData(data)
+  const fileName = template.fileName(resolved).replace(/\.pdf$/i, '') + '.docx'
+  saveBlob(await template.generateDocx(resolved), fileName)
 }
 
 export default function App() {
-  const [view, setView] = useState<View>('editor')
-  const [layoutMode, setLayoutMode] = useState<LayoutMode>('wizard')
-  const [templateId, setTemplateId] = useState(templates[0].id)
-  const template = templates.find((t) => t.id === templateId) ?? templates[0]
+  // 1. Détection prioritaire du mode signature publique via l'URL (/signer?token=... ou ?token=...)
+  const queryToken = new URLSearchParams(window.location.search).get('token')
+  const pathToken = window.location.pathname.startsWith('/signer')
+    ? new URLSearchParams(window.location.search).get('token')
+    : null
+  const publicToken = queryToken || pathToken
 
-  const [data, setData] = useState<DocData>(() => loadData(template.id, template.defaults()))
-  const [stepIndex, setStepIndex] = useState(0)
-  const [issuing, setIssuing] = useState(false)
+  if (publicToken) {
+    return <PublicSignPage token={publicToken} />
+  }
+
+  const template = templates[0] // Modèle de cession de droits d'auteur
+  const [activeContractId, setActiveContractId] = useState<number | null>(null)
   const [notice, setNotice] = useState<{ text: string; error?: boolean } | null>(null)
 
-  useEffect(() => saveData(template.id, data), [template.id, data])
-
-  const { field: numberField, dateField } = template.numbering
-  const year = yearOf(data[dateField])
-  const last = useLiveQuery(() => lastNumber(template.id, year).catch(() => 0), [template.id, year])
-  const seq = parseSeq(data[numberField])
-  const numero = seq === null ? '' : formatNumber(year, seq)
-  const docCount = useLiveQuery(() => db.documents.count().catch(() => 0), [])
-  const knownLabels = useLiveQuery(() => db.documents.orderBy('label').uniqueKeys().catch(() => []), [])
-
-  // Si pas de numéro saisi, on laisse vide pour afficher "Brouillon" proprement sans "CTR-…"
-  const previewData = useMemo(() => ({ ...data, [numberField]: numero || '' }), [data, numberField, numero])
-
-  const groups = useMemo(
-    () =>
-      template.groups.map((g) => ({
-        ...g,
-        fields: g.fields.map((f) =>
-          f.key === numberField && f.type === 'number'
-            ? {
-                ...f,
-                placeholder: String((last ?? 0) + 1),
-                hint: last
-                  ? `Dernier numéro émis en ${year} : ${formatNumber(year, last)}`
-                  : `Aucun contrat émis en ${year} : commence à 1 (${formatNumber(year, 1)})`,
-              }
-            : f,
-        ),
-      })),
-    [template.groups, numberField, last, year],
+  // Requête réactive sur la liste des contrats triés par date décroissante
+  const contracts = useLiveQuery(
+    () => db.contracts.orderBy('updatedAt').reverse().toArray().catch(() => []),
+    [],
   )
 
-  const steps = useMemo(
-    () => [
-      ...groups.map((g, i) => ({
-        title: g.title,
-        shortTitle: `${i + 1}. ${g.title.split(' ')[0]}`,
-      })),
-      { title: 'Rendu & Émission', shortTitle: `${groups.length + 1}. Rendu PDF` },
-    ],
-    [groups],
-  )
+  const activeContract = contracts?.find((c) => c.id === activeContractId) ?? null
 
-  const isRenderStep = stepIndex === groups.length
+  // Synchronisation en arrière-plan des contrats en attente de signature
+  useEffect(() => {
+    if (!contracts || contracts.length === 0) return
+    const pendingWithToken = contracts.filter(
+      (c) => c.status === 'pending_photographer' && c.shareToken,
+    )
+    if (pendingWithToken.length === 0) return
 
-  const Doc = template.Document
-  const document = useMemo(() => <Doc data={previewData} />, [Doc, previewData])
-
-  const selectTemplate = (id: string) => {
-    const next = templates.find((t) => t.id === id)!
-    setTemplateId(id)
-    setData(loadData(next.id, next.defaults()))
-    setStepIndex(0)
-    setNotice(null)
-  }
-
-  const reset = () => {
-    clearData(template.id)
-    setData(template.defaults())
-    setStepIndex(0)
-    setNotice(null)
-  }
-
-  const issue = async () => {
-    setIssuing(true)
-    setNotice(null)
-    try {
-      const doc = await issueDocument(template, data)
-      setData((d) => ({ ...d, [numberField]: '' }))
-      await renderPdf(template, await resolveData(doc.data))
-      setNotice({ text: `${template.name} ${doc.numero} émis et enregistré dans l'historique.` })
-    } catch (e) {
-      setNotice({ text: `Émission impossible : ${(e as Error).message}`, error: true })
-    } finally {
-      setIssuing(false)
-    }
-  }
-
-  const downloadDraft = async () => {
-    try {
-      await renderPdf(template, previewData)
-      setNotice({ text: 'Brouillon PDF téléchargé.' })
-    } catch (e) {
-      setNotice({ text: `Téléchargement impossible : ${(e as Error).message}`, error: true })
-    }
-  }
-
-  const downloadStored = async (doc: StoredDocument) => {
-    const t = templates.find((t) => t.id === doc.templateId)
-    if (!t) throw new Error(`Modèle « ${doc.templateId} » introuvable.`)
-    await renderPdf(t, await resolveData(doc.data))
-  }
-
-  const duplicate = async (doc: StoredDocument) => {
-    const t = templates.find((t) => t.id === doc.templateId)
-    if (!t) throw new Error(`Modèle « ${doc.templateId} » introuvable.`)
-    const copy = await resolveData(doc.data)
-    setTemplateId(t.id)
-    setData({
-      ...t.defaults(),
-      ...copy,
-      [t.numbering.field]: '',
-      [t.numbering.dateField]: t.defaults()[t.numbering.dateField],
+    pendingWithToken.forEach(async (c) => {
+      if (!c.shareToken) return
+      try {
+        const res = await checkRemoteContractStatus(c.shareToken)
+        if (res.status === 'signed' && res.contract) {
+          const updated: ContractItem = {
+            ...c,
+            status: 'signed',
+            data: {
+              ...c.data,
+              auteurSignature: res.contract.data.auteurSignature,
+              dateSignature: res.contract.data.dateSignature || c.data.dateSignature,
+            },
+          }
+          await saveContract(updated)
+          setNotice({ text: `Le contrat ${c.numero} a été signé en ligne par le photographe !` })
+        }
+      } catch {
+        // En attente ou hors ligne
+      }
     })
-    setStepIndex(0)
-    setNotice({ text: `Copie de ${doc.numero} : vérifie les étapes puis accède au rendu.` })
-    setView('editor')
+  }, [contracts?.length])
+
+  // Sauvegarde automatique des modifications apportées au contrat actif
+  const updateContractField = async (key: string, value: string) => {
+    if (!activeContract) return
+    const updatedData = { ...activeContract.data, [key]: value }
+    const updatedContract: ContractItem = {
+      ...activeContract,
+      data: updatedData,
+    }
+    await saveContract(updatedContract)
+  }
+
+  const handleTokenCreated = async (token: string, expiresAt: string) => {
+    if (!activeContract) return
+    const updated: ContractItem = {
+      ...activeContract,
+      shareToken: token,
+      shareExpiresAt: expiresAt,
+      status: activeContract.status === 'signed' ? 'signed' : 'pending_photographer',
+    }
+    await saveContract(updated)
+    setNotice({ text: 'Lien de signature créé et prêt à être envoyé.' })
+  }
+
+  const handleNewContract = async () => {
+    try {
+      const created = await createNewContract(template)
+      setActiveContractId(created.id ?? null)
+      setNotice(null)
+    } catch (e) {
+      setNotice({ text: `Impossible de créer le contrat : ${(e as Error).message}`, error: true })
+    }
+  }
+
+  const handleOpenContract = (c: ContractItem) => {
+    if (c.id) {
+      setActiveContractId(c.id)
+      setNotice(null)
+    }
+  }
+
+  const handleDuplicateContract = async (c: ContractItem) => {
+    if (!c.id) return
+    try {
+      const copy = await duplicateContract(c.id, template)
+      setNotice({ text: `Contrat dupliqué sous la référence ${copy.numero}.` })
+    } catch (e) {
+      setNotice({ text: `Erreur lors de la duplication : ${(e as Error).message}`, error: true })
+    }
+  }
+
+  const handleDeleteContract = async (id: number) => {
+    try {
+      await deleteContract(id)
+      if (activeContractId === id) {
+        setActiveContractId(null)
+      }
+      setNotice({ text: 'Contrat supprimé avec succès.' })
+    } catch (e) {
+      setNotice({ text: `Erreur lors de la suppression : ${(e as Error).message}`, error: true })
+    }
+  }
+
+  const handleExportBackup = async () => {
+    try {
+      saveBlob(await exportBackup(), `make-contrat-sauvegarde-${todayIso()}.json`)
+      setNotice({ text: 'Sauvegarde de tous vos contrats téléchargée.' })
+    } catch (e) {
+      setNotice({ text: `Erreur sauvegarde : ${(e as Error).message}`, error: true })
+    }
+  }
+
+  const handleImportBackup = async (file: File) => {
+    try {
+      const count = await importBackup(file)
+      setNotice({ text: `Sauvegarde restaurée : ${count} élément(s).` })
+    } catch (e) {
+      setNotice({ text: `Erreur restauration : ${(e as Error).message}`, error: true })
+    }
+  }
+
+  const handleDownloadPdf = async () => {
+    if (!activeContract) return
+    try {
+      await renderPdf(template, activeContract.data)
+      setNotice({ text: 'Contrat PDF téléchargé avec succès.' })
+    } catch (e) {
+      setNotice({ text: `Erreur téléchargement PDF : ${(e as Error).message}`, error: true })
+    }
+  }
+
+  const handleDownloadDocx = async () => {
+    if (!activeContract) return
+    try {
+      await renderDocx(template, activeContract.data)
+      setNotice({ text: 'Contrat Word (.docx) téléchargé avec succès.' })
+    } catch (e) {
+      setNotice({ text: `Erreur téléchargement Word : ${(e as Error).message}`, error: true })
+    }
   }
 
   return (
     <div className="app">
+      {/* BARRE SUPÉRIEURE UNIQUE */}
       <header className="topbar">
-        <div className="brand">Make Contrat</div>
-        <nav className="tabs" aria-label="Sections">
-          <button
-            type="button"
-            className={view === 'editor' ? 'tab active' : 'tab'}
-            onClick={() => setView('editor')}
-          >
-            Nouveau contrat
-          </button>
-          <button
-            type="button"
-            className={view === 'history' ? 'tab active' : 'tab'}
-            onClick={() => setView('history')}
-          >
-            Historique{docCount ? ` (${docCount})` : ''}
-          </button>
-        </nav>
+        <div className="brand" onClick={() => setActiveContractId(null)} style={{ cursor: 'pointer' }}>
+          <span className="brand-icon" aria-hidden="true">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+              <polyline points="14 2 14 8 20 8" />
+              <line x1="16" y1="13" x2="8" y2="13" />
+              <line x1="16" y1="17" x2="8" y2="17" />
+              <polyline points="10 9 9 9 8 9" />
+            </svg>
+          </span>
+          <div className="brand-text-wrap">
+            <span className="brand-title">Make Contrat</span>
+            <span className="brand-sub">Évasion Littorale</span>
+          </div>
+        </div>
 
         <div className="spacer" />
 
-        {view === 'editor' ? (
-          <>
-            <button
-              type="button"
-              className="btn btn-small btn-ghost"
-              onClick={() => setLayoutMode((m) => (m === 'wizard' ? 'split' : 'wizard'))}
-              title={
-                layoutMode === 'wizard'
-                  ? 'Basculer en vue côte-à-côte (formulaire + rendu en direct)'
-                  : 'Basculer en mode guidé par étapes'
-              }
-            >
-              {layoutMode === 'wizard' ? '◫ Vue scindée' : '📋 Mode par étapes'}
-            </button>
-
-            {templates.length > 1 ? (
-              <select
-                className="template-select"
-                value={templateId}
-                onChange={(e) => selectTemplate(e.target.value)}
-                aria-label="Modèle de contrat"
-              >
-                {templates.map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.name}
-                  </option>
-                ))}
-              </select>
-            ) : null}
-
-            <button type="button" className="btn btn-ghost" onClick={reset}>
-              Réinitialiser
-            </button>
-
-            <button
-              type="button"
-              className="btn btn-primary"
-              onClick={issue}
-              disabled={issuing || !numero}
-              title={numero ? undefined : 'Indique un numéro avant d’émettre'}
-            >
-              {issuing ? 'Émission…' : `Émettre${numero ? ` ${numero}` : ''}`}
-            </button>
-          </>
-        ) : null}
-      </header>
-
-      {view === 'history' ? (
-        <main className="history-view">
-          <ErrorBoundary fallback={(e, retry) => <SectionError error={e} retry={retry} />}>
-            <History templates={templates} onDownload={downloadStored} onDuplicate={duplicate} />
-          </ErrorBoundary>
-        </main>
-      ) : layoutMode === 'split' ? (
-        // Mode scindé classique (deux colonnes)
-        <main className="workspace">
-          <aside className="panel">
-            <p className="panel-intro">{template.description}</p>
-            {notice ? <p className={notice.error ? 'notice error' : 'notice'}>{notice.text}</p> : null}
-            <DocForm
-              groups={groups}
-              data={data}
-              suggestions={{ [template.labelField]: (knownLabels ?? []).map(String) }}
-              onChange={(key, value) => setData((d) => ({ ...d, [key]: value }))}
-            />
-          </aside>
-          <section className="preview">
-            <ErrorBoundary key={template.id} fallback={(e, retry) => <SectionError error={e} retry={retry} />}>
-              <PdfPreview document={document} />
-            </ErrorBoundary>
-          </section>
-        </main>
-      ) : (
-        // Mode par étapes (Wizard) : Formulaire d'abord, Rendu ensuite
-        <main className="render-container">
-          <div className="stepper-bar">
-            <StepWizard steps={steps} currentStep={stepIndex} onSelectStep={(idx) => setStepIndex(idx)} />
-          </div>
-
-          {notice ? (
-            <div style={{ padding: '0 20px', maxWidth: 760, margin: '8px auto 0', width: '100%' }}>
-              <p className={notice.error ? 'notice error' : 'notice'}>{notice.text}</p>
+        <div className="topbar-actions">
+          {activeContract ? (
+            <div className="topbar-contract-badge">
+              <span className="badge-dot green" />
+              <span>Contrat {activeContract.numero || 'en cours'}</span>
             </div>
           ) : null}
+        </div>
+      </header>
 
-          {!isRenderStep ? (
-            // ÉTAPES DU FORMULAIRE (AVANT LE RENDU)
-            <div className="wizard-view">
-              <div className="wizard-card">
-                <div className="wizard-header">
-                  <span className="wizard-step-badge">
-                    Étape {stepIndex + 1} sur {groups.length}
-                  </span>
-                  <h2 className="wizard-title">{groups[stepIndex]?.title}</h2>
-                </div>
+      {/* NOTIFICATIONS EN BANDEAU */}
+      {notice ? (
+        <div className="app-notice-bar">
+          <p className={notice.error ? 'notice error' : 'notice'}>
+            {notice.text}
+            <button type="button" className="notice-dismiss" onClick={() => setNotice(null)} aria-label="Fermer">
+              <span className="material-symbols-rounded icon-xs">close</span>
+            </button>
+          </p>
+        </div>
+      ) : null}
 
-                <DocForm
-                  groups={groups}
-                  activeGroupIndex={stepIndex}
-                  data={data}
-                  suggestions={{ [template.labelField]: (knownLabels ?? []).map(String) }}
-                  onChange={(key, value) => setData((d) => ({ ...d, [key]: value }))}
-                />
-
-                <div className="wizard-footer">
-                  {stepIndex > 0 ? (
-                    <button
-                      type="button"
-                      className="btn btn-ghost"
-                      onClick={() => setStepIndex((s) => s - 1)}
-                    >
-                      ← Étape précédente
-                    </button>
-                  ) : <div />}
-
-                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                    <button
-                      type="button"
-                      className="btn btn-ghost"
-                      onClick={() => setStepIndex(groups.length)}
-                      title="Accéder directement à l’aperçu PDF"
-                    >
-                      Voir le rendu PDF →
-                    </button>
-
-                    {stepIndex < groups.length - 1 ? (
-                      <button
-                        type="button"
-                        className="btn btn-primary"
-                        onClick={() => setStepIndex((s) => s + 1)}
-                      >
-                        Étape suivante →
-                      </button>
-                    ) : (
-                      <button
-                        type="button"
-                        className="btn btn-primary"
-                        onClick={() => setStepIndex(groups.length)}
-                      >
-                        Valider & voir le rendu →
-                      </button>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </div>
-          ) : (
-            // DERNIÈRE ÉTAPE : LE RENDU DU PDF (APRÈS LE FORMULAIRE)
-            <div className="render-container">
-              <div className="render-toolbar">
-                <div className="render-meta">
-                  <button
-                    type="button"
-                    className="btn btn-small"
-                    onClick={() => setStepIndex(0)}
-                  >
-                    ← Modifier le formulaire
-                  </button>
-                  <span className="render-badge">
-                    {numero ? `Contrat CTR-${numero}` : 'Brouillon non numéroté'}
-                  </span>
-                  <span>
-                    Auteur : <strong>{data.auteurNom || '—'}</strong>
-                  </span>
-                  <span>
-                    Cessionnaire : <strong>{data.cessionnaireDenomination || '—'}</strong>
-                  </span>
-                </div>
-
-                <div className="render-toolbar-actions">
-                  <button type="button" className="btn btn-small btn-ghost" onClick={downloadDraft}>
-                    Télécharger brouillon PDF
-                  </button>
-                  <button
-                    type="button"
-                    className="btn btn-small btn-primary"
-                    onClick={issue}
-                    disabled={issuing || !numero}
-                    title={numero ? undefined : 'Indique un numéro dans l’étape 1 avant d’émettre'}
-                  >
-                    {issuing ? 'Émission…' : `Émettre le contrat${numero ? ` ${numero}` : ''}`}
-                  </button>
-                </div>
-              </div>
-
-              <div className="render-frame-wrapper">
-                <ErrorBoundary key={template.id} fallback={(e, retry) => <SectionError error={e} retry={retry} />}>
-                  <PdfPreview document={document} delay={200} />
-                </ErrorBoundary>
-              </div>
-            </div>
-          )}
-        </main>
-      )}
-    </div>
-  )
-}
-
-function SectionError({ error, retry }: { error: Error; retry: () => void }) {
-  return (
-    <div className="preview-state error">
-      <p>Cette zone n'a pas pu s'afficher : {String(error.message || error)}</p>
-      <button type="button" className="btn btn-ghost" onClick={retry}>
-        Réessayer
-      </button>
+      {/* VUE PRINCIPALE : DASHBOARD OU PARCOURS DU CONTRAT */}
+      <main className="app-main-content">
+        {activeContract ? (
+          <StandardWorkflow
+            template={template}
+            data={activeContract.data}
+            onChange={updateContractField}
+            onSaveAndBack={() => setActiveContractId(null)}
+            onDownloadPdf={handleDownloadPdf}
+            onDownloadDocx={handleDownloadDocx}
+            contractNumero={activeContract.numero}
+            shareToken={activeContract.shareToken}
+            onTokenCreated={handleTokenCreated}
+          />
+        ) : (
+          <ContractsDashboard
+            contracts={contracts ?? []}
+            onNewContract={handleNewContract}
+            onOpenContract={handleOpenContract}
+            onQuickSign={handleOpenContract}
+            onDuplicate={handleDuplicateContract}
+            onDelete={handleDeleteContract}
+            onExportBackup={handleExportBackup}
+            onImportBackup={handleImportBackup}
+          />
+        )}
+      </main>
     </div>
   )
 }

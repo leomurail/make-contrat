@@ -11,10 +11,11 @@ const LAST_BACKUP_KEY = 'make-contrat:last-backup'
 interface Props {
   templates: DocTemplate[]
   onDownload: (doc: StoredDocument) => Promise<void>
+  onDownloadDocx?: (doc: StoredDocument) => Promise<void>
   onDuplicate: (doc: StoredDocument) => Promise<void>
 }
 
-export function History({ templates, onDownload, onDuplicate }: Props) {
+export function History({ templates, onDownload, onDownloadDocx, onDuplicate }: Props) {
   const [query, setQuery] = useState('')
   const [busyId, setBusyId] = useState<number | null>(null)
   const [message, setMessage] = useState<{ text: string; error?: boolean } | null>(null)
@@ -43,7 +44,11 @@ export function History({ templates, onDownload, onDuplicate }: Props) {
   const backup = async () => {
     saveBlob(await exportBackup(), `make-contrat-sauvegarde-${todayIso()}.json`)
     const now = new Date().toISOString()
-    try { localStorage.setItem(LAST_BACKUP_KEY, now) } catch { /* ignore */ }
+    try {
+      localStorage.setItem(LAST_BACKUP_KEY, now)
+    } catch {
+      /* ignore */
+    }
     setLastBackup(now)
     setMessage({ text: 'Sauvegarde téléchargée. Range-la hors de cet ordinateur (clé USB, cloud…).' })
   }
@@ -61,16 +66,33 @@ export function History({ templates, onDownload, onDuplicate }: Props) {
   return (
     <div className="history">
       <div className="history-bar">
-        <input type="search" placeholder="Rechercher un auteur, signataire ou numéro…" value={query}
-          onChange={(e) => setQuery(e.target.value)} aria-label="Rechercher" />
+        <input
+          type="search"
+          placeholder="Rechercher un auteur, signataire ou numéro…"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          aria-label="Rechercher"
+        />
         <div className="spacer" />
         <span className="muted small">
           {lastBackup ? `Dernière sauvegarde : ${new Date(lastBackup).toLocaleDateString('fr-FR')}` : 'Jamais sauvegardé'}
         </span>
-        <button type="button" className="btn" onClick={backup}>Sauvegarder</button>
-        <button type="button" className="btn btn-ghost" onClick={() => fileInput.current?.click()}>Restaurer…</button>
-        <input ref={fileInput} type="file" accept="application/json,.json" hidden
-          onChange={(e) => { restore(e.target.files?.[0]); e.target.value = '' }} />
+        <button type="button" className="btn" onClick={backup}>
+          Sauvegarder
+        </button>
+        <button type="button" className="btn btn-ghost" onClick={() => fileInput.current?.click()}>
+          Restaurer…
+        </button>
+        <input
+          ref={fileInput}
+          type="file"
+          accept="application/json,.json"
+          hidden
+          onChange={(e) => {
+            restore(e.target.files?.[0])
+            e.target.value = ''
+          }}
+        />
       </div>
 
       {message ? <p className={message.error ? 'notice error' : 'notice'}>{message.text}</p> : null}
@@ -98,10 +120,34 @@ export function History({ templates, onDownload, onDuplicate }: Props) {
                 <td className="num">{d.detail}</td>
                 <td className="muted">{names[d.templateId] ?? d.templateId}</td>
                 <td className="actions">
-                  <button type="button" className="btn btn-small" disabled={busyId === d.id}
-                    onClick={() => run(d.id, () => onDownload(d))}>PDF</button>
-                  <button type="button" className="btn btn-small btn-ghost" disabled={busyId === d.id}
-                    onClick={() => run(d.id, () => onDuplicate(d))}>Dupliquer</button>
+                  <button
+                    type="button"
+                    className="btn btn-small"
+                    disabled={busyId === d.id}
+                    onClick={() => run(d.id, () => onDownload(d))}
+                  >
+                    PDF
+                  </button>
+                  {onDownloadDocx ? (
+                    <button
+                      type="button"
+                      className="btn btn-small"
+                      disabled={busyId === d.id}
+                      onClick={() => run(d.id, () => onDownloadDocx(d))}
+                      style={{ marginLeft: 6 }}
+                    >
+                      Word (.docx)
+                    </button>
+                  ) : null}
+                  <button
+                    type="button"
+                    className="btn btn-small btn-ghost"
+                    disabled={busyId === d.id}
+                    onClick={() => run(d.id, () => onDuplicate(d))}
+                    style={{ marginLeft: 4 }}
+                  >
+                    Dupliquer
+                  </button>
                 </td>
               </tr>
             ))}

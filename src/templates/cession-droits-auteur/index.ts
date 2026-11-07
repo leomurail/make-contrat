@@ -1,182 +1,250 @@
-import { slugify, todayIso } from '../../lib/format'
+import { serializeSocialAccounts, slugify, todayIso } from '../../lib/format'
 import type { DocTemplate } from '../../lib/types'
 import { ContratCession } from './ContratCession'
+import { generateContratCessionDocx } from './docx'
 import type { ContratCessionData } from './types'
 
 export type { ContratCessionData }
 
+export const SUPPORTS_OPTIONS = [
+  'Site internet et réseaux sociaux',
+  'Site internet uniquement',
+  'Réseaux sociaux uniquement',
+] as const
+
+export const REMUNERATION_OPTIONS = [
+  'À titre gracieux (gratuit)',
+  'Rémunération forfaitaire',
+] as const
+
+export const DROIT_IMAGE_OPTIONS = [
+  'Garantie accordée (autorisations détenues)',
+  'Non applicable (paysages et biens sans personnes identifiables)',
+] as const
+
+const usesWebsite = (d: Record<string, string>) =>
+  !d.supportsAutorises || d.supportsAutorises.toLowerCase().includes('site internet')
+
+const usesSocials = (d: Record<string, string>) =>
+  !d.supportsAutorises || d.supportsAutorises.toLowerCase().includes('réseaux sociaux')
+
+const isPaid = (d: Record<string, string>) =>
+  Boolean(d.remunerationType && d.remunerationType.toLowerCase().includes('forfait'))
+
 export const contratCession: DocTemplate<ContratCessionData> = {
   id: 'cession-droits-auteur',
   name: "Cession de droits d'auteur",
-  description: "Contrat de cession de droits d'auteur sur œuvres photographiques (Instagram / Web)",
+  description: "Contrat simplifié de cession de droits d'auteur sur photographies (Site web & Réseaux sociaux)",
   fileName: (d) =>
-    `contrat-cession-droits-${slugify(d.numero || 'brouillon')}-${slugify(d.auteurNom || 'auteur')}.pdf`,
+    `contrat-cession-droits-${slugify(d.numero || 'brouillon')}-${slugify(d.auteurNom || 'photographe')}.pdf`,
   Document: ContratCession,
+  generateDocx: generateContratCessionDocx,
   numbering: { field: 'numero', dateField: 'dateSignature' },
   labelField: 'auteurNom',
-  detail: (d) => d.cessionnaireDenomination || 'Cessionnaire non spécifié',
+  detail: (d) => d.cessionnaireDenomination || 'Évasion Littorale',
   defaults: () => ({
     numero: '',
     dateSignature: todayIso(),
-    villeSignature: 'Venansault',
-    nombreExemplaires: '2',
+    villeSignature: 'Saint-Jean-de-Monts',
 
-    auteurNom: 'Camille Dupont',
-    auteurInstagram: 'camille_shots',
-    auteurAdresse: '12 rue des Alizés, 85000 La Roche-sur-Yon',
-    auteurStatut: 'Particulier',
-    auteurSiret: 'Sans objet',
-    auteurTelephone: '06 12 34 56 78',
-    auteurEmail: 'camille.dupont@email.com',
+    // Photographe : vide par défaut
+    auteurNom: '',
+    auteurInstagram: '',
+    auteurEmail: '',
+    auteurAdresse: '',
     auteurSignature: '',
 
+    // Bénéficiaire : pré-rempli avec les données SIRENE (Laurent JONAS EI - 444 869 051 00045)
     cessionnaireDenomination: 'Évasion Littorale',
-    cessionnaireForme: 'Entreprise Individuelle (EI)',
-    cessionnaireCapital: 'Sans objet',
-    cessionnaireAdresse: '41 rue Pierre Nicolas Loué, 85190 Venansault',
-    cessionnaireRcs: 'RCS La Roche-sur-Yon n° 109 409 045',
-    cessionnaireRepresentant: 'Léo Murail, Fondateur',
-    cessionnaireTelephone: '06 43 52 69 26',
-    cessionnaireEmail: 'contact@evasionlittorale.com',
+    cessionnaireRepresentant: 'Laurent JONAS EI',
+    cessionnaireAdresse: 'Bâtiment B, 19 boulevard Victor Hugo, 44200 Nantes',
+    cessionnaireRcs: '444 869 051 00045',
+    cessionnaireEmail: 'evasionlittorale@gmail.com',
     cessionnaireSignature: '',
 
+    // Exploitation & Conditions
+    supportsAutorises: SUPPORTS_OPTIONS[0],
     siteUrlPrincipale: 'https://evasionlittorale.com',
-    siteUrlSecondaire: 'https://evasionlittorale.leomurail.fr',
-    dureeAnnees: '5',
-    dureeLettres: 'cinq',
-    remunerationType: 'À titre gracieux (gratuit)',
-    remunerationMontant: 'Sans objet',
-    garantieDroitImage: 'Garantie accordée (autorisations détenues)',
+    reseauxSociauxCessionnaire: serializeSocialAccounts([
+      {
+        platform: 'Instagram',
+        handle: 'evasionlittorale',
+        url: 'https://www.instagram.com/evasionlittorale',
+      },
+      {
+        platform: 'Facebook',
+        handle: 'Évasion Littorale',
+        url: 'https://www.facebook.com/profile.php?id=61594089339082',
+      },
+    ]),
+    dureeAnnees: '10',
+    remunerationType: REMUNERATION_OPTIONS[0],
+    remunerationMontant: '',
+    garantieDroitImage: DROIT_IMAGE_OPTIONS[0],
 
-    annexePublications: [
-      'Publication 1 : https://www.instagram.com/p/DB12345/ - Photographie du port au coucher du soleil',
-      'Publication 2 : https://www.instagram.com/p/DC67890/ - Photographie de la côte rocheuse et des vagues',
-      'Publication 3 : https://www.instagram.com/p/DD11223/ - Photographie aérienne du sentier littoral',
-    ].join('\n'),
+    // Photos cédées
+    annexePublications: '',
     annexeImage: '',
   }),
   groups: [
     {
-      title: 'Contrat & Émission',
+      title: 'Le Photographe (Cédant)',
+      shortTitle: 'Photographe',
+      description: 'Identité, adresse postale et compte Instagram de l’auteur des photos',
       fields: [
         {
-          key: 'numero',
-          label: 'Numéro du contrat',
-          type: 'number',
-          step: 1,
-          min: 1,
-          hint: 'Numéro séquentiel (ex : 1 donnera CTR-2026-001)',
+          key: 'auteurNom',
+          label: 'Nom et prénom',
+          type: 'text',
+          placeholder: 'Ex : Jean Martin',
+          hint: 'Nom et prénom d’état civil de la personne qui a pris les photos',
         },
-        { key: 'dateSignature', label: 'Date de signature', type: 'date' },
-        { key: 'villeSignature', label: 'Lieu de signature (Fait à)', type: 'text', placeholder: 'Venansault' },
-      ],
-    },
-    {
-      title: 'L’Auteur (Le Cédant)',
-      fields: [
-        { key: 'auteurNom', label: 'Nom et prénom', type: 'text', placeholder: 'Camille Dupont' },
+        {
+          key: 'auteurAdresse',
+          label: 'Adresse postale',
+          type: 'text',
+          placeholder: 'Ex : 12 rue des Pins, 85160 Saint-Jean-de-Monts',
+          hint: 'Nécessaire pour identifier légalement le signataire (ou à compléter par lui sur le contrat)',
+        },
+        {
+          key: 'auteurEmail',
+          label: 'Adresse e-mail',
+          type: 'text',
+          placeholder: 'Ex : jean.martin@email.com',
+        },
         {
           key: 'auteurInstagram',
           label: 'Compte Instagram',
           type: 'text',
-          placeholder: 'camille_shots (sans le @)',
-          hint: 'L’URL du profil et la mention de crédit seront générées automatiquement',
+          prefix: '@',
+          placeholder: 'jean_photos',
+          hint: 'Génère automatiquement le lien du profil et la mention de crédit photo obligatoire',
         },
-        {
-          key: 'auteurStatut',
-          label: 'Statut',
-          type: 'select',
-          options: ['Particulier', 'Artiste-auteur', 'Indépendant / Freelance', 'Entreprise Individuelle'],
-        },
-        { key: 'auteurAdresse', label: 'Adresse de domicile', type: 'textarea', rows: 2 },
-        { key: 'auteurSiret', label: 'N° SIRET ou n° d’ordre', type: 'text', placeholder: 'Sans objet' },
-        { key: 'auteurTelephone', label: 'Téléphone', type: 'text', placeholder: '06 12 34 56 78' },
-        { key: 'auteurEmail', label: 'Adresse e-mail', type: 'text', placeholder: 'camille.dupont@email.com' },
-        { key: 'auteurSignature', label: 'Signature manuscrite du cédant', type: 'image' },
       ],
     },
     {
-      title: 'Le Cessionnaire (Bénéficiaire)',
+      title: 'Le Bénéficiaire (Votre structure)',
+      shortTitle: 'Bénéficiaire',
+      description: 'Coordonnées juridiques et SIRET de l’établissement exploitant',
       fields: [
-        { key: 'cessionnaireDenomination', label: 'Dénomination sociale', type: 'text', placeholder: 'Évasion Littorale' },
         {
-          key: 'cessionnaireForme',
-          label: 'Forme juridique',
-          type: 'select',
-          options: [
-            'Entreprise Individuelle (EI)',
-            'SAS',
-            'SASU',
-            'SARL',
-            'EURL',
-            'Association',
-            'Société Civile',
-          ],
-        },
-        { key: 'cessionnaireCapital', label: 'Capital social', type: 'text', placeholder: 'Sans objet ou 1 000 €' },
-        { key: 'cessionnaireAdresse', label: 'Siège social', type: 'textarea', rows: 2 },
-        {
-          key: 'cessionnaireRcs',
-          label: 'Immatriculation (RCS / SIREN)',
+          key: 'cessionnaireDenomination',
+          label: 'Nom commercial / Enseigne',
           type: 'text',
-          placeholder: 'RCS La Roche-sur-Yon n° 109 409 045',
+          placeholder: 'Évasion Littorale',
         },
         {
           key: 'cessionnaireRepresentant',
-          label: 'Représenté par (Nom, prénom et fonction)',
+          label: 'Titulaire légal',
           type: 'text',
-          placeholder: 'Léo Murail, Fondateur',
+          placeholder: 'Laurent JONAS EI',
         },
-        { key: 'cessionnaireTelephone', label: 'Téléphone', type: 'text', placeholder: '06 43 52 69 26' },
-        { key: 'cessionnaireEmail', label: 'Adresse e-mail', type: 'text', placeholder: 'contact@evasionlittorale.com' },
-        { key: 'cessionnaireSignature', label: 'Signature / Cachet du cessionnaire', type: 'image' },
+        {
+          key: 'cessionnaireAdresse',
+          label: 'Adresse de l’établissement',
+          type: 'text',
+          placeholder: 'Bâtiment B, 19 boulevard Victor Hugo, 44200 Nantes',
+        },
+        {
+          key: 'cessionnaireRcs',
+          label: 'Numéro SIRET',
+          type: 'text',
+          placeholder: '444 869 051 00045',
+        },
+        {
+          key: 'cessionnaireEmail',
+          label: 'Adresse e-mail de contact',
+          type: 'text',
+          placeholder: 'evasionlittorale@gmail.com',
+        },
       ],
     },
     {
-      title: 'Destination & Conditions d’exploitation',
+      title: 'Supports & Conditions',
+      shortTitle: 'Conditions',
+      description: 'Canaux de diffusion, durée légale de cession et droit à l’image',
       fields: [
-        { key: 'siteUrlPrincipale', label: 'URL principale du site web', type: 'text', placeholder: 'https://evasionlittorale.com' },
-        { key: 'siteUrlSecondaire', label: 'URL secondaire du site web', type: 'text', placeholder: 'https://evasionlittorale.leomurail.fr' },
-        { key: 'dureeAnnees', label: 'Durée (en années)', type: 'number', step: 1, min: 1, suffix: 'ans' },
-        { key: 'dureeLettres', label: 'Durée (en toutes lettres)', type: 'text', placeholder: 'cinq' },
+        {
+          key: 'supportsAutorises',
+          label: 'Supports d’exploitation autorisés',
+          type: 'select',
+          options: [...SUPPORTS_OPTIONS],
+          hint: 'Définit légalement où vous avez le droit de publier les images',
+        },
+        {
+          key: 'siteUrlPrincipale',
+          label: 'URL du site internet',
+          type: 'text',
+          placeholder: 'https://evasionlittorale.com',
+          showIf: usesWebsite,
+        },
+        {
+          key: 'reseauxSociauxCessionnaire',
+          label: 'Vos comptes réseaux sociaux (optionnel)',
+          type: 'socials',
+          hint: 'Saisissez simplement votre @identifiant : le lien complet du compte sera ajouté automatiquement au contrat.',
+          showIf: usesSocials,
+        },
+        {
+          key: 'dureeAnnees',
+          label: 'Durée d’autorisation',
+          type: 'number',
+          step: 1,
+          min: 1,
+          suffix: 'ans',
+          placeholder: '10',
+          presets: [
+            { label: '5 ans', value: '5' },
+            { label: '10 ans (Recommandé)', value: '10' },
+            { label: '15 ans', value: '15' },
+            { label: '30 ans', value: '30' },
+            { label: '99 ans (Durée max légale)', value: '99' },
+          ],
+          hint: 'En droit français, la durée ne peut pas être « illimitée », mais peut aller de 10 à 99 ans.',
+        },
         {
           key: 'remunerationType',
-          label: 'Type de rémunération',
+          label: 'Contrepartie financière',
           type: 'select',
-          options: ['À titre gracieux (gratuit)', 'Rémunération forfaitaire'],
+          options: [...REMUNERATION_OPTIONS],
         },
         {
           key: 'remunerationMontant',
-          label: 'Montant forfaitaire (si applicable)',
+          label: 'Montant du forfait convenu',
           type: 'text',
-          placeholder: 'Sans objet ou 250 € HT',
+          placeholder: 'Ex : 150 € TTC',
+          showIf: isPaid,
         },
         {
           key: 'garantieDroitImage',
-          label: 'Droit à l’image',
-          type: 'select',
+          label: 'Personnes identifiables sur les photos (Droit à l’image)',
+          type: 'radio-cards',
           options: [
-            'Garantie accordée (autorisations détenues)',
-            'Non applicable (paysages et biens sans personnes identifiables)',
+            {
+              value: DROIT_IMAGE_OPTIONS[0],
+              title: 'Garantie par le photographe (recommandé par défaut)',
+              description:
+                'Si des personnes sont reconnaissables, le photographe certifie avoir leur accord et en assume seul la responsabilité juridique.',
+            },
+            {
+              value: DROIT_IMAGE_OPTIONS[1],
+              title: 'Aucune personne identifiable sur les clichés',
+              description:
+                'Photos de paysages, plages, logements, nature ou silhouettes non reconnaissables.',
+            },
           ],
         },
       ],
     },
     {
-      title: 'Annexe 1 – Œuvres Cédées',
+      title: 'Photographies cédées',
+      shortTitle: 'Photos',
+      description: 'Sélection et légendes des photographies ou captures Instagram annexées au contrat',
       fields: [
         {
           key: 'annexePublications',
-          label: 'Publications Instagram cédées (URL et descriptions)',
-          type: 'textarea',
-          rows: 6,
-          placeholder: 'Publication 1 : URL - Description\nPublication 2 : URL - Description',
-          hint: 'Une ligne par publication cédée',
-        },
-        {
-          key: 'annexeImage',
-          label: 'Capture d’écran horodatée du compte Instagram (optionnel)',
-          type: 'image',
+          label: 'Photographies ou captures d’écran Instagram concernées',
+          type: 'photos',
         },
       ],
     },
