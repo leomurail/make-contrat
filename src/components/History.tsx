@@ -53,8 +53,14 @@ export function History({ templates, onDownload, onDownloadDocx, onDuplicate }: 
     setMessage({ text: 'Sauvegarde téléchargée. Range-la hors de cet ordinateur (clé USB, cloud…).' })
   }
 
+  const MAX_BACKUP_SIZE = 10 * 1024 * 1024 // 10 Mo
+
   const restore = async (file: File | undefined) => {
     if (!file) return
+    if (file.size > MAX_BACKUP_SIZE) {
+      setMessage({ text: 'Fichier de sauvegarde trop volumineux (maximum 10 Mo).', error: true })
+      return
+    }
     try {
       const count = await importBackup(file)
       setMessage({ text: `Sauvegarde restaurée : ${count} document(s).` })

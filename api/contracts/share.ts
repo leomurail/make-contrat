@@ -5,11 +5,40 @@ export const config = {
   runtime: 'edge',
 }
 
+const MAX_BODY_BYTES = 5 * 1024 * 1024 // 5 Mo max
+
 export default async function handler(request: Request) {
   if (request.method !== 'POST') {
     return new Response(JSON.stringify({ error: 'Méthode non autorisée. Utilisez POST.' }), {
       status: 405,
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'Cache-Control': 'no-store, private',
+      },
+    })
+  }
+
+  // Protection anti-CSRF / Sec-Fetch-Site
+  const secFetchSite = request.headers.get('sec-fetch-site')
+  if (secFetchSite && secFetchSite === 'cross-site') {
+    return new Response(JSON.stringify({ error: 'Requête cross-origin non autorisée.' }), {
+      status: 403,
+      headers: {
+        'Content-Type': 'application/json',
+        'Cache-Control': 'no-store, private',
+      },
+    })
+  }
+
+  // Vérification de la taille de la charge entrante
+  const contentLength = request.headers.get('content-length')
+  if (contentLength && parseInt(contentLength, 10) > MAX_BODY_BYTES) {
+    return new Response(JSON.stringify({ error: 'Contenu trop volumineux (limite 5 Mo).' }), {
+      status: 413,
+      headers: {
+        'Content-Type': 'application/json',
+        'Cache-Control': 'no-store, private',
+      },
     })
   }
 
@@ -22,7 +51,10 @@ export default async function handler(request: Request) {
       }),
       {
         status: 500,
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Cache-Control': 'no-store, private',
+        },
       },
     )
   }
@@ -31,10 +63,13 @@ export default async function handler(request: Request) {
     const body = await request.json()
     const { contractNumero, data } = body
 
-    if (!data) {
-      return new Response(JSON.stringify({ error: 'Données du contrat manquantes.' }), {
+    if (!data || typeof data !== 'object') {
+      return new Response(JSON.stringify({ error: 'Données du contrat manquantes ou invalides.' }), {
         status: 400,
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Cache-Control': 'no-store, private',
+        },
       })
     }
 
@@ -66,15 +101,22 @@ export default async function handler(request: Request) {
       }),
       {
         status: 201,
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Cache-Control': 'no-store, private',
+        },
       },
     )
   } catch (error) {
+    console.error('[API /api/contracts/share]', error)
     return new Response(
-      JSON.stringify({ error: `Erreur lors de la génération du lien : ${(error as Error).message}` }),
+      JSON.stringify({ error: 'Erreur lors de la génération du lien.' }),
       {
         status: 500,
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Cache-Control': 'no-store, private',
+        },
       },
     )
   }

@@ -5,6 +5,11 @@ export const config = {
   runtime: 'edge',
 }
 
+const COMMON_HEADERS = {
+  'Content-Type': 'application/json',
+  'Cache-Control': 'no-store, private',
+}
+
 export default async function handler(request: Request) {
   const url = new URL(request.url)
   const redis = getRedisClient()
@@ -14,7 +19,7 @@ export default async function handler(request: Request) {
       JSON.stringify({
         error: 'Base de données non disponible. Veuillez vérifier la connexion Upstash Redis.',
       }),
-      { status: 500, headers: { 'Content-Type': 'application/json' } },
+      { status: 500, headers: COMMON_HEADERS },
     )
   }
 
@@ -24,7 +29,7 @@ export default async function handler(request: Request) {
     if (!token) {
       return new Response(JSON.stringify({ error: 'Jeton de signature manquant.' }), {
         status: 400,
-        headers: { 'Content-Type': 'application/json' },
+        headers: COMMON_HEADERS,
       })
     }
 
@@ -36,25 +41,35 @@ export default async function handler(request: Request) {
             error:
               'Ce lien de signature est invalide, a expiré ou le contrat a été supprimé.',
           }),
-          { status: 404, headers: { 'Content-Type': 'application/json' } },
+          { status: 404, headers: COMMON_HEADERS },
         )
       }
 
       const record: RemoteContractRecord = typeof raw === 'string' ? JSON.parse(raw) : raw
       return new Response(JSON.stringify({ success: true, contract: record }), {
         status: 200,
-        headers: { 'Content-Type': 'application/json' },
+        headers: COMMON_HEADERS,
       })
     } catch (error) {
+      console.error('[API /api/contracts/sign GET]', error)
       return new Response(
-        JSON.stringify({ error: `Erreur de lecture du contrat : ${(error as Error).message}` }),
-        { status: 500, headers: { 'Content-Type': 'application/json' } },
+        JSON.stringify({ error: 'Erreur lors de la lecture du contrat.' }),
+        { status: 500, headers: COMMON_HEADERS },
       )
     }
   }
 
   // --- POST : Apposer la signature du photographe ---
   if (request.method === 'POST') {
+    // Protection anti-CSRF
+    const secFetchSite = request.headers.get('sec-fetch-site')
+    if (secFetchSite && secFetchSite === 'cross-site') {
+      return new Response(JSON.stringify({ error: 'Requête non autorisée.' }), {
+        status: 403,
+        headers: COMMON_HEADERS,
+      })
+    }
+
     try {
       const body = await request.json()
       const { token, auteurSignature, signerName } = body
@@ -62,7 +77,7 @@ export default async function handler(request: Request) {
       if (!token || !auteurSignature) {
         return new Response(
           JSON.stringify({ error: 'Jeton et signature obligatoires.' }),
-          { status: 400, headers: { 'Content-Type': 'application/json' } },
+          { status: 400, headers: COMMON_HEADERS },
         )
       }
 
@@ -70,7 +85,7 @@ export default async function handler(request: Request) {
       if (!raw) {
         return new Response(
           JSON.stringify({ error: 'Ce contrat n’existe plus ou a expiré.' }),
-          { status: 404, headers: { 'Content-Type': 'application/json' } },
+          { status: 404, headers: COMMON_HEADERS },
         )
       }
 
@@ -82,7 +97,7 @@ export default async function handler(request: Request) {
             error: 'Ce contrat a déjà été signé et validé.',
             contract: record,
           }),
-          { status: 400, headers: { 'Content-Type': 'application/json' } },
+          { status: 400, headers: COMMON_HEADERS },
         )
       }
 
@@ -108,18 +123,19 @@ export default async function handler(request: Request) {
 
       return new Response(JSON.stringify({ success: true, contract: record }), {
         status: 200,
-        headers: { 'Content-Type': 'application/json' },
+        headers: COMMON_HEADERS,
       })
     } catch (error) {
+      console.error('[API /api/contracts/sign POST]', error)
       return new Response(
-        JSON.stringify({ error: `Erreur lors de la signature : ${(error as Error).message}` }),
-        { status: 500, headers: { 'Content-Type': 'application/json' } },
+        JSON.stringify({ error: 'Erreur lors de la signature.' }),
+        { status: 500, headers: COMMON_HEADERS },
       )
     }
   }
 
   return new Response(JSON.stringify({ error: 'Méthode non autorisée.' }), {
     status: 405,
-    headers: { 'Content-Type': 'application/json' },
+    headers: COMMON_HEADERS,
   })
 }
