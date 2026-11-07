@@ -130,6 +130,12 @@ export function ContractsDashboard({
               onChange={(e) => {
                 const file = e.target.files?.[0]
                 if (file) {
+                  const MAX_BACKUP_SIZE = 10 * 1024 * 1024 // 10 Mo
+                  if (file.size > MAX_BACKUP_SIZE) {
+                    alert('Fichier de sauvegarde trop volumineux (maximum 10 Mo).')
+                    e.target.value = ''
+                    return
+                  }
                   onImportBackup(file)
                   e.target.value = ''
                 }
