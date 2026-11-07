@@ -64,6 +64,7 @@ export async function submitRemoteSignature(
   token: string,
   auteurSignature: string,
   signerName?: string,
+  auteurLuApprouve: boolean = true,
 ): Promise<RemoteContractRecord> {
   const response = await fetch('/api/contracts/sign', {
     method: 'POST',
@@ -72,6 +73,7 @@ export async function submitRemoteSignature(
       token,
       auteurSignature,
       signerName,
+      auteurLuApprouve,
     }),
   })
 

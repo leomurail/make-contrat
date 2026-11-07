@@ -241,7 +241,16 @@ export function ContractsDashboard({
                 </div>
 
                 <div className="contract-card-footer" onClick={(e) => e.stopPropagation()}>
-                  {!isSigned ? (
+                  {isSigned ? (
+                    <button
+                      type="button"
+                      className="btn btn-small btn-primary"
+                      onClick={() => onOpenContract(c)}
+                    >
+                      <span className="material-symbols-rounded icon-xs">verified</span>
+                      <span>Consulter l'acte signé (2/2)</span>
+                    </button>
+                  ) : (
                     <button
                       type="button"
                       className="btn btn-small btn-primary"
@@ -249,14 +258,6 @@ export function ContractsDashboard({
                     >
                       <span className="material-symbols-rounded icon-xs">draw</span>
                       <span>Signer</span>
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      className="btn btn-small btn-ghost"
-                      onClick={() => onOpenContract(c)}
-                    >
-                      Voir le contrat
                     </button>
                   )}
 

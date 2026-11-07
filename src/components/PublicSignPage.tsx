@@ -1,10 +1,12 @@
-import { useEffect, useRef, useState, type PointerEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type PointerEvent } from 'react'
 import { pdf } from '@react-pdf/renderer'
 import { fetchRemoteContract, submitRemoteSignature, type RemoteContractRecord } from '../lib/remoteSigning'
 import { templates } from '../templates'
 import { resolveData } from '../lib/archive'
 import { saveBlob } from '../lib/download'
-import { parsePhotoItems } from '../lib/format'
+import { PdfPreview } from './PdfPreview'
+import { ErrorBoundary } from './ErrorBoundary'
+import type { DocData } from '../lib/types'
 
 interface Props {
   token: string
@@ -14,18 +16,24 @@ export function PublicSignPage({ token }: Props) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [record, setRecord] = useState<RemoteContractRecord | null>(null)
+  const [resolvedData, setResolvedData] = useState<DocData | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [downloading, setDownloading] = useState(false)
   const [success, setSuccess] = useState(false)
   const [signerName, setSignerName] = useState('')
   const [agreed, setAgreed] = useState(false)
+  const [mobileTab, setMobileTab] = useState<'preview' | 'sign'>('preview')
+  const [isFullscreenPreview, setIsFullscreenPreview] = useState(false)
 
-  // Canvas de signature tactile
+  // Canvas tactile de signature
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const isDownRef = useRef(false)
   const [hasDrawn, setHasDrawn] = useState(false)
 
-  // Initialisation et chargement des données du contrat
+  const template = templates[0]
+  const Doc = template.Document
+
+  // Initialisation et chargement des données du contrat distant
   useEffect(() => {
     async function load() {
       try {
@@ -34,8 +42,11 @@ export function PublicSignPage({ token }: Props) {
         const contract = await fetchRemoteContract(token)
         setRecord(contract)
         setSignerName(contract.data.auteurNom || '')
+        const resolved = await resolveData(contract.data)
+        setResolvedData(resolved)
         if (contract.status === 'signed') {
           setSuccess(true)
+          setAgreed(true)
         }
       } catch (err) {
         setError((err as Error).message || 'Impossible de charger le contrat.')
@@ -46,7 +57,7 @@ export function PublicSignPage({ token }: Props) {
     load()
   }, [token])
 
-  // Canvas setup
+  // Initialisation du contexte canvas
   useEffect(() => {
     if (loading || success || record?.status === 'signed') return
     const canvas = canvasRef.current
@@ -57,7 +68,18 @@ export function PublicSignPage({ token }: Props) {
     ctx.lineWidth = 2.5
     ctx.lineCap = 'round'
     ctx.lineJoin = 'round'
-  }, [loading, success, record?.status])
+  }, [loading, success, record?.status, mobileTab])
+
+  // Gestion de la touche Échap pour le plein écran
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setIsFullscreenPreview(false)
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [])
 
   const getPos = (e: PointerEvent<HTMLCanvasElement>) => {
     const rect = e.currentTarget.getBoundingClientRect()
@@ -101,29 +123,29 @@ export function PublicSignPage({ token }: Props) {
   }
 
   const handleSubmit = async () => {
-    if (!canvasRef.current || !hasDrawn || !agreed) return
+    if (!canvasRef.current || !hasDrawn || !agreed || !signerName.trim()) return
     try {
       setSubmitting(true)
       const dataUrl = canvasRef.current.toDataURL('image/png')
-      const updated = await submitRemoteSignature(token, dataUrl, signerName)
+      const updated = await submitRemoteSignature(token, dataUrl, signerName.trim(), true)
       setRecord(updated)
+      const resolved = await resolveData(updated.data)
+      setResolvedData(resolved)
       setSuccess(true)
+      setMobileTab('preview')
     } catch (err) {
-      alert((err as Error).message || 'Erreur lors de la validation.')
+      alert((err as Error).message || 'Erreur lors de la validation du contrat.')
     } finally {
       setSubmitting(false)
     }
   }
 
   const handleDownloadPdf = async () => {
-    if (!record) return
+    if (!record || !resolvedData) return
     try {
       setDownloading(true)
-      const template = templates[0]
-      const Doc = template.Document
-      const resolved = await resolveData(record.data)
-      const blob = await pdf(<Doc data={resolved} />).toBlob()
-      saveBlob(blob, template.fileName(resolved))
+      const blob = await pdf(<Doc data={resolvedData} />).toBlob()
+      saveBlob(blob, template.fileName(resolvedData))
     } catch (err) {
       alert(`Erreur génération PDF : ${(err as Error).message}`)
     } finally {
@@ -131,13 +153,19 @@ export function PublicSignPage({ token }: Props) {
     }
   }
 
+  // Document React-PDF mémorisé pour prévisualisation fluide
+  const previewDocument = useMemo(() => {
+    if (!resolvedData) return null
+    return <Doc data={resolvedData} />
+  }, [Doc, resolvedData])
+
   if (loading) {
     return (
       <div className="public-sign-page loading-center">
         <div className="loading-card">
           <div className="sign-spinner" />
           <h2>Chargement de votre contrat...</h2>
-          <p>Vérification du lien sécurisé en cours</p>
+          <p>Génération de l'aperçu officiel interactif</p>
         </div>
       </div>
     )
@@ -160,10 +188,9 @@ export function PublicSignPage({ token }: Props) {
     )
   }
 
-  const photos = parsePhotoItems(record.data.annexeImage)
-
   return (
     <div className="public-sign-page">
+      {/* EN-TÊTE FIXE DU CONTRAT PUBLIC */}
       <header className="public-sign-header">
         <div className="public-sign-brand">
           <span className="brand-logo-pill">Évasion Littorale</span>
@@ -171,142 +198,149 @@ export function PublicSignPage({ token }: Props) {
         </div>
         <div className="public-sign-ref">
           Réf. : <strong>{record.contractNumero}</strong>
+          {success ? (
+            <span className="status-pill status-signed" style={{ marginLeft: 12 }}>
+              <span className="material-symbols-rounded icon-xs">verified</span> Contrat 100% Signé
+            </span>
+          ) : (
+            <span className="status-pill status-pending" style={{ marginLeft: 12 }}>
+              <span className="material-symbols-rounded icon-xs">pending</span> Signature requise
+            </span>
+          )}
         </div>
       </header>
 
       <main className="public-sign-main">
+        {/* BANNIÈRE DE SUCCÈS QUAND LE CONTRAT EST SIGNÉ */}
         {success ? (
-          <div className="public-sign-card success-card">
-            <div className="success-icon-bubble">
-              <span className="material-symbols-rounded">verified</span>
+          <div className="public-sign-card success-banner-card" style={{ marginBottom: 24, textAlign: 'center', background: '#f0fdf4', borderColor: '#bbf7d0' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, marginBottom: 8 }}>
+              <span className="material-symbols-rounded" style={{ fontSize: 32, color: '#16a34a' }}>verified</span>
+              <h2 style={{ margin: 0, fontSize: 22, color: '#14532d' }}>Contrat 100% signé et validé !</h2>
             </div>
-            <h2>Contrat 100% signé et validé !</h2>
-            <p className="success-sub">
-              Merci {record.data.auteurNom || ''}, votre signature a bien été enregistrée et apposée sur l’acte officiel.
+            <p style={{ margin: '0 0 16px', fontSize: 14, color: '#166534' }}>
+              Merci <strong>{record.data.auteurNom || ''}</strong>, votre signature et la mention manuscrite légale ont été apposées avec succès sur l’acte officiel.
             </p>
-
-            <div className="success-recap-box">
-              <div className="recap-row">
-                <span>Réf. contrat :</span>
-                <strong>{record.contractNumero}</strong>
-              </div>
-              <div className="recap-row">
-                <span>Bénéficiaire :</span>
-                <span>Évasion Littorale (Laurent Jonas)</span>
-              </div>
-              <div className="recap-row">
-                <span>Auteur / Photographe :</span>
-                <span>{record.data.auteurNom || 'Non renseigné'}</span>
-              </div>
-              <div className="recap-row">
-                <span>Date de finalisation :</span>
-                <span>{record.photographeSignedAt ? new Date(record.photographeSignedAt).toLocaleDateString('fr-FR') : 'Aujourd’hui'}</span>
-              </div>
-            </div>
-
-            <div className="success-actions">
+            <div style={{ display: 'flex', justifyContent: 'center', gap: 12, flexWrap: 'wrap' }}>
               <button
                 type="button"
                 className="btn btn-primary btn-large"
                 onClick={handleDownloadPdf}
                 disabled={downloading}
               >
-                <span className="material-symbols-rounded">download</span>
-                <span>{downloading ? 'Génération du PDF...' : 'Télécharger mon exemplaire PDF officiel'}</span>
+                <span className="material-symbols-rounded icon-sm">download</span>
+                <span>{downloading ? 'Génération du PDF...' : 'Télécharger mon exemplaire PDF signé (2/2)'}</span>
               </button>
             </div>
-
-            <p className="success-note">
-              Un exemplaire a également été transmis directement à Évasion Littorale pour archivage.
-            </p>
           </div>
-        ) : (
-          <div className="public-sign-container">
-            {/* Colonne gauche : Synthèse et lecture du contrat */}
-            <div className="public-sign-summary-col">
-              <div className="public-sign-card">
-                <span className="badge-pending-tag">Signature requise</span>
-                <h1 className="sign-doc-heading">Signature de votre accord de cession</h1>
-                <p className="sign-doc-intro">
-                  Bonjour <strong>{record.data.auteurNom || 'cher photographe'}</strong>, <strong>Évasion Littorale</strong> vous invite à signer électroniquement le contrat de cession de droits d'auteur sur vos publications photographiques.
-                </p>
+        ) : null}
 
-                <div className="sign-recap-grid">
-                  <div className="recap-item">
-                    <span className="recap-lbl">Bénéficiaire (Cessionnaire)</span>
-                    <strong className="recap-val">Évasion Littorale — Laurent Jonas</strong>
-                  </div>
-                  <div className="recap-item">
-                    <span className="recap-lbl">Auteur (Cédant)</span>
-                    <strong className="recap-val">
-                      {record.data.auteurNom || 'À renseigner ci-contre'}
-                      {record.data.auteurInstagram ? ` (@${record.data.auteurInstagram.replace(/^@/, '')})` : ''}
-                    </strong>
-                  </div>
-                  <div className="recap-item">
-                    <span className="recap-lbl">Durée de la cession</span>
-                    <strong className="recap-val">{record.data.dureeAnnees || '3'} ans</strong>
-                  </div>
-                  <div className="recap-item">
-                    <span className="recap-lbl">Modalités</span>
-                    <strong className="recap-val">
-                      {record.data.remunerationType === 'forfaitaire'
-                        ? `Rémunération forfaitaire de ${record.data.remunerationMontant || '0'} €`
-                        : 'À titre gracieux (échange de visibilité)'}
-                    </strong>
-                  </div>
-                </div>
+        {/* SÉLECTEUR D'ONGLETS POUR MOBILE (< 860px) */}
+        {!success ? (
+          <div className="public-sign-tabs-mobile">
+            <button
+              type="button"
+              className={`public-sign-tab-btn ${mobileTab === 'preview' ? 'active' : ''}`}
+              onClick={() => setMobileTab('preview')}
+            >
+              <span className="material-symbols-rounded icon-sm">description</span>
+              <span>1. Consulter le contrat</span>
+            </button>
+            <button
+              type="button"
+              className={`public-sign-tab-btn ${mobileTab === 'sign' ? 'active' : ''}`}
+              onClick={() => setMobileTab('sign')}
+            >
+              <span className="material-symbols-rounded icon-sm">draw</span>
+              <span>2. Signer l'acte</span>
+            </button>
+          </div>
+        ) : null}
 
-                <div className="sign-photos-section">
-                  <h3 className="section-mini-title">Photographies faisant l'objet de la cession ({photos.length > 0 ? photos.length : '1+'})</h3>
-                  {photos.length > 0 ? (
-                    <ul className="sign-photos-list">
-                      {photos.map((p, idx) => (
-                        <li key={idx} className="sign-photo-item">
-                          <span className="photo-num">#{idx + 1}</span>
-                          <div className="photo-info">
-                            <span className="photo-desc">{p.label || `Photographie n°${idx + 1}`}</span>
-                          </div>
-                          {p.src ? (
-                            <img src={p.src} alt={p.label} style={{ width: 44, height: 44, objectFit: 'cover', borderRadius: 4 }} />
-                          ) : null}
-                        </li>
-                      ))}
-                    </ul>
-                  ) : record.data.annexePublications ? (
-                    <div className="text-muted-sm" style={{ whiteSpace: 'pre-line', background: '#ffffff', padding: '10px 14px', borderRadius: 6, border: '1px solid var(--border-subtle)' }}>
-                      {record.data.annexePublications}
-                    </div>
-                  ) : (
-                    <p className="text-muted-sm">Publications photographiques définies en annexe du contrat.</p>
-                  )}
-                </div>
-
-                <div className="sign-pdf-action-box">
-                  <button
-                    type="button"
-                    className="btn btn-secondary btn-small"
-                    onClick={handleDownloadPdf}
-                    disabled={downloading}
-                  >
-                    <span className="material-symbols-rounded icon-sm">visibility</span>
-                    <span>{downloading ? 'Génération en cours...' : 'Consulter le contrat complet (PDF)'}</span>
-                  </button>
-                  <span className="pdf-sub-hint">Visualisez l'acte juridique au format officiel A4</span>
-                </div>
+        {/* CONTENEUR PRINCIPAL EN SPLIT-SCREEN SUR DESKTOP */}
+        <div className="public-sign-container">
+          {/* COLONNE GAUCHE : PRÉVISUALISATION DIRECTE ET INTERACTIVE DU CONTRAT */}
+          <div
+            className="public-preview-col"
+            style={{ display: !success && mobileTab === 'sign' ? 'none' : 'flex' }}
+          >
+            <div className="public-preview-header-bar">
+              <div className="public-preview-title">
+                <span className="material-symbols-rounded icon-sm text-brand">menu_book</span>
+                <span>Document contractuel officiel A4 (Pages & Clauses)</span>
+              </div>
+              <div className="public-preview-actions">
+                <button
+                  type="button"
+                  className="btn btn-small btn-ghost"
+                  onClick={() => setIsFullscreenPreview(true)}
+                  title="Ouvrir le contrat en plein écran pour une lecture confortable"
+                >
+                  <span className="material-symbols-rounded icon-xs">open_in_full</span>
+                  <span>Plein écran</span>
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-small btn-ghost"
+                  onClick={handleDownloadPdf}
+                  disabled={downloading}
+                  title="Télécharger le document PDF"
+                >
+                  <span className="material-symbols-rounded icon-xs">download</span>
+                  <span>PDF</span>
+                </button>
               </div>
             </div>
 
-            {/* Colonne droite : Espace de signature */}
-            <div className="public-sign-action-col">
+            <div className="public-preview-frame-wrap">
+              {previewDocument ? (
+                <ErrorBoundary
+                  fallback={(err, retry) => (
+                    <div className="preview-state error">
+                      <p>Erreur d'affichage : {err.message}</p>
+                      <button type="button" className="btn btn-ghost" onClick={retry}>
+                        Réessayer
+                      </button>
+                    </div>
+                  )}
+                >
+                  <PdfPreview document={previewDocument} delay={100} />
+                </ErrorBoundary>
+              ) : null}
+            </div>
+
+            {/* Bouton d'action flottant en bas d'écran sur mobile pour passer à la signature */}
+            {!success ? (
+              <div className="public-mobile-floating-bar">
+                <button
+                  type="button"
+                  className="btn btn-primary btn-large"
+                  onClick={() => setMobileTab('sign')}
+                >
+                  <span className="material-symbols-rounded">draw</span>
+                  <span>Passer à la signature du contrat ✍️</span>
+                </button>
+              </div>
+            ) : null}
+          </div>
+
+          {/* COLONNE DROITE : PANNEAU TACTILE DE SIGNATURE INTERACTIF */}
+          {!success ? (
+            <div
+              className="public-sign-action-col"
+              style={{ display: mobileTab === 'preview' ? 'none' : 'block' }}
+            >
               <div className="public-sign-card signature-pad-card">
-                <h2 className="pad-card-title">Votre signature numérique</h2>
+                <h2 className="pad-card-title">Votre signature électronique</h2>
                 <p className="pad-card-sub">
-                  Apposez votre signature directement dans le cadre ci-dessous (au doigt sur mobile, ou à la souris).
+                  Vérifiez votre nom, cochez la mention légale et apposez votre signature au doigt ou à la souris.
                 </p>
 
+                {/* Champ Nom du signataire */}
                 <div className="pad-input-group">
-                  <label htmlFor="signer-name" className="pad-input-lbl">Votre nom complet :</label>
+                  <label htmlFor="signer-name" className="pad-input-lbl">
+                    Votre prénom et nom d'auteur :
+                  </label>
                   <input
                     id="signer-name"
                     type="text"
@@ -317,6 +351,24 @@ export function PublicSignPage({ token }: Props) {
                   />
                 </div>
 
+                {/* Case à cocher obligatoire : Lu et approuvé */}
+                <label className="legal-checkbox-wrap">
+                  <input
+                    type="checkbox"
+                    checked={agreed}
+                    onChange={(e) => setAgreed(e.target.checked)}
+                  />
+                  <div>
+                    <span>
+                      Je déclare avoir pris connaissance des termes du présent contrat de cession et y apposer la mention légale obligatoire :
+                    </span>
+                    <span className="public-sign-handwriting-preview">
+                      « Lu et approuvé, bon pour accord »
+                    </span>
+                  </div>
+                </label>
+
+                {/* Zone de tracé manuscrit */}
                 <div className="pad-canvas-wrap">
                   <canvas
                     ref={canvasRef}
@@ -329,7 +381,9 @@ export function PublicSignPage({ token }: Props) {
                     onPointerCancel={endStroke}
                   />
                   <div className="canvas-guideline" />
-                  <span className="canvas-label-hint">Signez ici</span>
+                  <span className="canvas-label-hint">
+                    {hasDrawn ? 'Signature capturée ✓' : 'Tracez votre signature ici'}
+                  </span>
                 </div>
 
                 <div className="canvas-actions-bar">
@@ -337,31 +391,22 @@ export function PublicSignPage({ token }: Props) {
                     type="button"
                     className="btn btn-ghost btn-small text-danger"
                     onClick={clearCanvas}
+                    disabled={!hasDrawn}
                   >
                     <span className="material-symbols-rounded icon-xs">refresh</span>
                     <span>Effacer le tracé</span>
                   </button>
                 </div>
 
-                <label className="legal-checkbox-wrap">
-                  <input
-                    type="checkbox"
-                    checked={agreed}
-                    onChange={(e) => setAgreed(e.target.checked)}
-                  />
-                  <span>
-                    Je déclare avoir pris connaissance des termes du présent contrat de cession et y apposer ma signature avec la mention légale <strong>« Lu et approuvé, bon pour accord »</strong>.
-                  </span>
-                </label>
-
+                {/* Bouton de validation final */}
                 <button
                   type="button"
                   className="btn btn-primary btn-large btn-full-width"
                   disabled={!hasDrawn || !agreed || !signerName.trim() || submitting}
                   onClick={handleSubmit}
                 >
-                  <span className="material-symbols-rounded">draw</span>
-                  <span>{submitting ? 'Validation en cours...' : 'Valider et signer le contrat'}</span>
+                  <span className="material-symbols-rounded">verified</span>
+                  <span>{submitting ? 'Validation et horodatage...' : 'Valider et signer le contrat'}</span>
                 </button>
 
                 <p className="legal-security-note">
@@ -370,9 +415,61 @@ export function PublicSignPage({ token }: Props) {
                 </p>
               </div>
             </div>
-          </div>
-        )}
+          ) : null}
+        </div>
       </main>
+
+      {/* MODAL APERÇU IMMERSIF PLEIN ÉCRAN */}
+      {isFullscreenPreview && previewDocument ? (
+        <div className="preview-fullscreen-modal" role="dialog" aria-modal="true" aria-label="Aperçu Plein Écran">
+          <div className="preview-fullscreen-topbar">
+            <div className="preview-fullscreen-title">
+              <span className="material-symbols-rounded preview-fullscreen-logo icon-lg">description</span>
+              <div>
+                <strong>Contrat de cession — Réf. {record.contractNumero}</strong>
+                <span className="preview-fullscreen-sub">
+                  Évasion Littorale & {record.data.auteurNom || 'Photographe'} • Acte officiel
+                </span>
+              </div>
+            </div>
+
+            <div className="preview-fullscreen-actions">
+              <button
+                type="button"
+                className="btn btn-small btn-primary"
+                onClick={handleDownloadPdf}
+                disabled={downloading}
+              >
+                <span className="material-symbols-rounded icon-xs">download</span>
+                <span>{downloading ? 'Génération…' : 'Télécharger le PDF'}</span>
+              </button>
+              <button
+                type="button"
+                className="btn-icon-close"
+                onClick={() => setIsFullscreenPreview(false)}
+                aria-label="Fermer le plein écran"
+              >
+                <span className="material-symbols-rounded">close</span>
+              </button>
+            </div>
+          </div>
+
+          <div className="preview-fullscreen-content">
+            <ErrorBoundary
+              fallback={(err, retry) => (
+                <div className="preview-state error">
+                  <p>Erreur d'affichage : {err.message}</p>
+                  <button type="button" className="btn btn-ghost" onClick={retry}>
+                    Réessayer
+                  </button>
+                </div>
+              )}
+            >
+              <PdfPreview document={previewDocument} delay={100} />
+            </ErrorBoundary>
+          </div>
+        </div>
+      ) : null}
     </div>
   )
 }

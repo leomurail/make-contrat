@@ -55,36 +55,60 @@ export default function App() {
 
   const activeContract = contracts?.find((c) => c.id === activeContractId) ?? null
 
-  // Synchronisation en arrière-plan des contrats en attente de signature
+  // Synchronisation active en arrière-plan des contrats en attente de signature
   useEffect(() => {
     if (!contracts || contracts.length === 0) return
-    const pendingWithToken = contracts.filter(
-      (c) => c.status === 'pending_photographer' && c.shareToken,
-    )
-    if (pendingWithToken.length === 0) return
 
-    pendingWithToken.forEach(async (c) => {
-      if (!c.shareToken) return
-      try {
-        const res = await checkRemoteContractStatus(c.shareToken)
-        if (res.status === 'signed' && res.contract) {
-          const updated: ContractItem = {
-            ...c,
-            status: 'signed',
-            data: {
-              ...c.data,
-              auteurSignature: res.contract.data.auteurSignature,
-              dateSignature: res.contract.data.dateSignature || c.data.dateSignature,
-            },
+    const checkPendingContracts = async () => {
+      const pendingWithToken = contracts.filter(
+        (c) => c.status === 'pending_photographer' && c.shareToken,
+      )
+      if (pendingWithToken.length === 0) return
+
+      for (const c of pendingWithToken) {
+        if (!c.shareToken) continue
+        try {
+          const res = await checkRemoteContractStatus(c.shareToken)
+          if (res.status === 'signed' && res.contract) {
+            const updated: ContractItem = {
+              ...c,
+              status: 'signed',
+              data: {
+                ...c.data,
+                auteurSignature: res.contract.data.auteurSignature,
+                auteurLuApprouve: res.contract.data.auteurLuApprouve || 'true',
+                dateSignature: res.contract.data.dateSignature || c.data.dateSignature,
+                auteurNom: res.contract.data.auteurNom || c.data.auteurNom,
+              },
+            }
+            await saveContract(updated)
+            setNotice({
+              text: `Le contrat ${c.numero} (${res.contract.data.auteurNom || 'Photographe'}) a été signé ! L’acte officiel est désormais 100% validé.`,
+            })
           }
-          await saveContract(updated)
-          setNotice({ text: `Le contrat ${c.numero} a été signé en ligne par le photographe !` })
+        } catch {
+          // Contrat encore en attente ou problème réseau passager
         }
-      } catch {
-        // En attente ou hors ligne
       }
-    })
-  }, [contracts?.length])
+    }
+
+    // Vérification immédiate
+    checkPendingContracts()
+
+    // Polling toutes les 6 secondes pour détecter la signature en direct
+    const interval = setInterval(checkPendingContracts, 6000)
+
+    // Vérification supplémentaire quand l'utilisateur revient sur l'onglet
+    const handleFocus = () => {
+      checkPendingContracts()
+    }
+    window.addEventListener('focus', handleFocus)
+
+    return () => {
+      clearInterval(interval)
+      window.removeEventListener('focus', handleFocus)
+    }
+  }, [contracts])
 
   // Sauvegarde automatique des modifications apportées au contrat actif
   const updateContractField = async (key: string, value: string) => {

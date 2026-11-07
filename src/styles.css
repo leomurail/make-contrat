@@ -22,6 +22,14 @@
   font-display: swap;
 }
 
+@font-face {
+  font-family: 'Caveat';
+  src: url('./assets/fonts/caveat/Caveat-SemiBold.ttf') format('truetype');
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+
 /* --- GOOGLE MATERIAL SYMBOLS --- */
 .material-symbols-rounded {
   font-family: 'Material Symbols Rounded', sans-serif;
@@ -118,6 +126,7 @@
   /* Typographie */
   --font-display: 'Cabinet Grotesk', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   --font-body: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --font-handwriting: 'Caveat', 'Segoe Print', cursive, sans-serif;
 }
 
 *, *::before, *::after {
@@ -2296,16 +2305,16 @@ body {
 }
 
 .public-sign-main {
-  max-width: 1080px;
+  max-width: 1220px;
   width: 100%;
   margin: 0 auto;
-  padding: 28px 20px 60px;
+  padding: 24px 20px 60px;
   flex: 1;
 }
 
 .public-sign-container {
   display: grid;
-  grid-template-columns: 1.15fr 0.95fr;
+  grid-template-columns: minmax(0, 1.25fr) minmax(340px, 0.95fr);
   gap: 28px;
   align-items: start;
 }
@@ -2606,6 +2615,191 @@ body {
   color: var(--text-dim);
   margin-top: 14px;
   text-align: center;
+}
+
+.public-sign-tabs-mobile {
+  display: none;
+}
+
+@media (max-width: 860px) {
+  .public-sign-tabs-mobile {
+    display: flex;
+    gap: 8px;
+    background: #e2e8f0;
+    padding: 4px;
+    border-radius: var(--radius-sm);
+    margin-bottom: 20px;
+  }
+  .public-sign-tab-btn {
+    flex: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 10px 14px;
+    border: none;
+    background: transparent;
+    border-radius: 6px;
+    font-size: 13.5px;
+    font-weight: 600;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+  .public-sign-tab-btn.active {
+    background: #ffffff;
+    color: var(--text-main);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  }
+}
+
+/* Colonne Aperçu interactif */
+.public-preview-col {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.public-preview-header-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 18px;
+  background: #ffffff;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  gap: 12px;
+}
+
+.public-preview-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text-main);
+}
+
+.public-preview-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.public-preview-frame-wrap {
+  background: #525659;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  height: 720px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+
+@media (max-width: 860px) {
+  .public-preview-frame-wrap {
+    height: 560px;
+  }
+}
+
+.public-preview-frame-wrap .preview-frame {
+  height: 100%;
+  width: 100%;
+}
+
+.public-preview-frame-wrap .preview-frame iframe {
+  width: 100%;
+  height: 100%;
+  border: none;
+  display: block;
+}
+
+.public-mobile-floating-bar {
+  display: none;
+}
+
+@media (max-width: 860px) {
+  .public-mobile-floating-bar {
+    position: sticky;
+    bottom: 16px;
+    left: 0;
+    right: 0;
+    margin-top: 16px;
+    z-index: 20;
+    display: flex;
+  }
+  .public-mobile-floating-bar .btn {
+    width: 100%;
+    box-shadow: var(--shadow-float);
+  }
+}
+
+.public-sign-handwriting-preview {
+  display: block;
+  font-family: var(--font-handwriting);
+  font-size: 20px;
+  color: #1e3a8a;
+  line-height: 1.25;
+  margin-top: 4px;
+}
+
+/* Mention manuscrite dans le modal et les cartes */
+.sig-approval-checkbox-wrap {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+  margin: 14px 0 10px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.sig-approval-checkbox-wrap input[type='checkbox'] {
+  margin-top: 3px;
+  width: 18px;
+  height: 18px;
+  accent-color: var(--brand-main);
+  cursor: pointer;
+}
+
+.sig-approval-checkbox-content {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.sig-approval-checkbox-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-main);
+}
+
+.sig-approval-handwritten {
+  font-family: var(--font-handwriting);
+  font-size: 21px;
+  color: #1e3a8a;
+  line-height: 1.2;
+}
+
+.sig-handwritten-mention-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  border-radius: 6px;
+  padding: 4px 10px;
+  margin-bottom: 8px;
+}
+
+.sig-handwritten-mention-badge .handwritten-mention-text {
+  font-family: var(--font-handwriting);
+  font-size: 18px;
+  color: #1e3a8a;
 }
 
 /* Success Card */

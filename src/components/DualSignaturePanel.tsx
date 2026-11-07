@@ -30,6 +30,7 @@ export function DualSignaturePanel({
     const saved = getSavedBeneficiaireSignature()
     if (saved) {
       onChange('cessionnaireSignature', saved)
+      onChange('cessionnaireLuApprouve', 'true')
     }
   }
 
@@ -106,12 +107,19 @@ export function DualSignaturePanel({
           <div className="sig-box">
             {hasBeneficiaire ? (
               <div className="sig-display">
+                <div className="sig-handwritten-mention-badge">
+                  <span className="material-symbols-rounded icon-xs text-brand">check_box</span>
+                  <span className="handwritten-mention-text">« Lu et approuvé, bon pour accord »</span>
+                </div>
                 <img src={data.cessionnaireSignature} alt="Signature Bénéficiaire" className="sig-img" />
                 <div className="sig-actions-row">
                   <button
                     type="button"
                     className="btn btn-small btn-ghost text-danger"
-                    onClick={() => onChange('cessionnaireSignature', '')}
+                    onClick={() => {
+                      onChange('cessionnaireSignature', '')
+                      onChange('cessionnaireLuApprouve', '')
+                    }}
                   >
                     Effacer la signature
                   </button>
@@ -179,12 +187,19 @@ export function DualSignaturePanel({
           <div className="sig-box">
             {hasAuteur ? (
               <div className="sig-display">
+                <div className="sig-handwritten-mention-badge">
+                  <span className="material-symbols-rounded icon-xs text-brand">check_box</span>
+                  <span className="handwritten-mention-text">« Lu et approuvé, bon pour accord »</span>
+                </div>
                 <img src={data.auteurSignature} alt="Signature Photographe" className="sig-img" />
                 <div className="sig-actions-row">
                   <button
                     type="button"
                     className="btn btn-small btn-ghost text-danger"
-                    onClick={() => onChange('auteurSignature', '')}
+                    onClick={() => {
+                      onChange('auteurSignature', '')
+                      onChange('auteurLuApprouve', '')
+                    }}
                   >
                     Effacer la signature
                   </button>
@@ -250,11 +265,13 @@ export function DualSignaturePanel({
           onSave={(dataUrl) => {
             if (activeSigner === 'beneficiaire') {
               onChange('cessionnaireSignature', dataUrl)
+              onChange('cessionnaireLuApprouve', 'true')
               if (rememberBeneficiaire) {
                 saveBeneficiaireSignature(dataUrl)
               }
             } else {
               onChange('auteurSignature', dataUrl)
+              onChange('auteurLuApprouve', 'true')
             }
             setActiveSigner(null)
           }}
@@ -273,6 +290,7 @@ export function DualSignaturePanel({
           }}
           onContractSignedRemotely={(sig, date) => {
             onChange('auteurSignature', sig)
+            onChange('auteurLuApprouve', 'true')
             if (date) onChange('dateSignature', date)
             setShowShareModal(false)
           }}
@@ -301,6 +319,7 @@ function SignatureModal({
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const isDownRef = useRef(false)
   const [hasDrawn, setHasDrawn] = useState(false)
+  const [agreedMention, setAgreedMention] = useState(true)
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -355,7 +374,7 @@ function SignatureModal({
   }
 
   const save = () => {
-    if (!canvasRef.current || !hasDrawn) return
+    if (!canvasRef.current || !hasDrawn || !agreedMention) return
     onSave(canvasRef.current.toDataURL('image/png'))
   }
 
@@ -387,6 +406,18 @@ function SignatureModal({
           <span className="sig-canvas-label">Signer ici</span>
         </div>
 
+        <label className="sig-approval-checkbox-wrap">
+          <input
+            type="checkbox"
+            checked={agreedMention}
+            onChange={(e) => setAgreedMention(e.target.checked)}
+          />
+          <div className="sig-approval-checkbox-content">
+            <span className="sig-approval-checkbox-title">Mention manuscrite légale obligatoire :</span>
+            <span className="sig-approval-handwritten">« Lu et approuvé, bon pour accord »</span>
+          </div>
+        </label>
+
         {isBeneficiaire ? (
           <label className="sig-remember-checkbox">
             <input
@@ -410,7 +441,7 @@ function SignatureModal({
             type="button"
             className="btn btn-primary"
             onClick={save}
-            disabled={!hasDrawn}
+            disabled={!hasDrawn || !agreedMention}
           >
             Valider la signature
           </button>

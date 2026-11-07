@@ -72,7 +72,7 @@ export default async function handler(request: Request) {
 
     try {
       const body = await request.json()
-      const { token, auteurSignature, signerName } = body
+      const { token, auteurSignature, signerName, auteurLuApprouve } = body
 
       if (!token || !auteurSignature) {
         return new Response(
@@ -109,6 +109,7 @@ export default async function handler(request: Request) {
       record.data = {
         ...record.data,
         auteurSignature,
+        auteurLuApprouve: auteurLuApprouve !== false ? 'true' : 'true',
         dateSignature: record.data.dateSignature || todayString,
         auteurNom: signerName || record.data.auteurNom,
       }

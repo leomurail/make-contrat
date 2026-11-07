@@ -53,6 +53,7 @@ export const contratCession: DocTemplate<ContratCessionData> = {
     auteurEmail: '',
     auteurAdresse: '',
     auteurSignature: '',
+    auteurLuApprouve: '',
 
     // Bénéficiaire : pré-rempli avec les données SIRENE (Laurent JONAS EI - 444 869 051 00045)
     cessionnaireDenomination: 'Évasion Littorale',
@@ -61,6 +62,7 @@ export const contratCession: DocTemplate<ContratCessionData> = {
     cessionnaireRcs: '444 869 051 00045',
     cessionnaireEmail: 'evasionlittorale@gmail.com',
     cessionnaireSignature: '',
+    cessionnaireLuApprouve: '',
 
     // Exploitation & Conditions
     supportsAutorises: SUPPORTS_OPTIONS[0],

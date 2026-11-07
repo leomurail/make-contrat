@@ -166,6 +166,41 @@ const s = StyleSheet.create({
     marginTop: 2,
     marginBottom: 5,
   },
+  signatureApprovalRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 2,
+    marginBottom: 4,
+  },
+  checkboxBox: {
+    width: 9,
+    height: 9,
+    borderWidth: 0.8,
+    borderColor: '#0f172a',
+    borderRadius: 1.5,
+    marginRight: 5,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  checkboxChecked: {
+    backgroundColor: '#0f172a',
+  },
+  checkboxInnerCheck: {
+    color: '#ffffff',
+    fontSize: 7,
+    fontFamily: 'Helvetica-Bold',
+    lineHeight: 8,
+  },
+  signatureHandwrittenMention: {
+    fontFamily: 'Caveat',
+    fontSize: 12,
+    color: '#1e3a8a',
+  },
+  signaturePlaceholderMention: {
+    fontFamily: 'Helvetica-Oblique',
+    fontSize: 7.8,
+    color: '#555555',
+  },
   signatureArea: {
     height: 48,
     justifyContent: 'flex-start',
@@ -254,6 +289,9 @@ export function ContratCession({ data }: Props) {
     .split('\n')
     .map((l) => l.trim())
     .filter(Boolean)
+
+  const hasAuteurSig = Boolean(data.auteurSignature && data.auteurSignature.trim() !== '')
+  const hasCessionnaireSig = Boolean(data.cessionnaireSignature && data.cessionnaireSignature.trim() !== '')
 
   const hasSeparateAnnexe = photoItems.length > 0 || publicationsList.length > 6
 
@@ -507,9 +545,16 @@ export function ContratCession({ data }: Props) {
             <View style={s.signatureCol}>
               <Text style={s.signatureColTitle}>Pour l’Auteur (Le Photographe)</Text>
               <Text style={s.signatureMeta}>Nom : {data.auteurNom?.trim() || '…………………………………………'}</Text>
-              <Text style={s.signatureMention}>
-                Signature précédée de la mention « Lu et approuvé, bon pour accord » :
-              </Text>
+              <View style={s.signatureApprovalRow}>
+                <View style={[s.checkboxBox, hasAuteurSig ? s.checkboxChecked : {}]}>
+                  {hasAuteurSig ? <Text style={s.checkboxInnerCheck}>✓</Text> : null}
+                </View>
+                {hasAuteurSig ? (
+                  <Text style={s.signatureHandwrittenMention}>Lu et approuvé, bon pour accord</Text>
+                ) : (
+                  <Text style={s.signaturePlaceholderMention}>« Lu et approuvé, bon pour accord »</Text>
+                )}
+              </View>
               <View style={s.signatureArea}>
                 {data.auteurSignature ? <Image style={s.signatureImg} src={data.auteurSignature} /> : null}
               </View>
@@ -521,9 +566,16 @@ export function ContratCession({ data }: Props) {
               <Text style={s.signatureMeta}>
                 {`${data.cessionnaireDenomination?.trim() || 'Évasion Littorale'}${data.cessionnaireRepresentant?.trim() ? ` — ${data.cessionnaireRepresentant.trim()}` : ''}`}
               </Text>
-              <Text style={s.signatureMention}>
-                Signature précédée de la mention « Lu et approuvé, bon pour accord » :
-              </Text>
+              <View style={s.signatureApprovalRow}>
+                <View style={[s.checkboxBox, hasCessionnaireSig ? s.checkboxChecked : {}]}>
+                  {hasCessionnaireSig ? <Text style={s.checkboxInnerCheck}>✓</Text> : null}
+                </View>
+                {hasCessionnaireSig ? (
+                  <Text style={s.signatureHandwrittenMention}>Lu et approuvé, bon pour accord</Text>
+                ) : (
+                  <Text style={s.signaturePlaceholderMention}>« Lu et approuvé, bon pour accord »</Text>
+                )}
+              </View>
               <View style={s.signatureArea}>
                 {data.cessionnaireSignature ? <Image style={s.signatureImg} src={data.cessionnaireSignature} /> : null}
               </View>

@@ -152,12 +152,14 @@ export async function generateContratCessionDocx(data: ContratCessionData): Prom
                 children: [new TextRun({ text: `Nom : ${data.auteurNom?.trim() || '…………………………………………'}`, size: 19 })],
               }),
               new Paragraph({
-                spacing: { after: auteurSigImg ? 120 : 720 },
+                spacing: { after: auteurSigImg ? 80 : 720 },
                 children: [
                   new TextRun({
-                    text: 'Signature précédée de la mention « Lu et approuvé, bon pour accord » :',
+                    text: (auteurSigImg ? '☑ ' : '☐ ') + '« Lu et approuvé, bon pour accord »',
+                    bold: Boolean(auteurSigImg),
                     italics: true,
-                    size: 18,
+                    color: auteurSigImg ? '1e3a8a' : '555555',
+                    size: 19,
                   }),
                 ],
               }),
@@ -200,12 +202,14 @@ export async function generateContratCessionDocx(data: ContratCessionData): Prom
                 ],
               }),
               new Paragraph({
-                spacing: { after: cessionnaireSigImg ? 120 : 720 },
+                spacing: { after: cessionnaireSigImg ? 80 : 720 },
                 children: [
                   new TextRun({
-                    text: 'Signature précédée de la mention « Lu et approuvé, bon pour accord » :',
+                    text: (cessionnaireSigImg ? '☑ ' : '☐ ') + '« Lu et approuvé, bon pour accord »',
+                    bold: Boolean(cessionnaireSigImg),
                     italics: true,
-                    size: 18,
+                    color: cessionnaireSigImg ? '1e3a8a' : '555555',
+                    size: 19,
                   }),
                 ],
               }),

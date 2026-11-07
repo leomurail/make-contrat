@@ -12,6 +12,7 @@ export interface ContratCessionData extends DocData {
   auteurEmail: string
   auteurAdresse: string
   auteurSignature: string
+  auteurLuApprouve: string
 
   // Cessionnaire (Le Bénéficiaire)
   cessionnaireDenomination: string
@@ -20,6 +21,7 @@ export interface ContratCessionData extends DocData {
   cessionnaireRcs: string
   cessionnaireEmail: string
   cessionnaireSignature: string
+  cessionnaireLuApprouve: string
 
   // Périmètre & Exploitation
   supportsAutorises: string
