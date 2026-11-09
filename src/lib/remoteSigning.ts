@@ -100,3 +100,20 @@ export async function checkRemoteContractStatus(
 
   return response.json()
 }
+
+/**
+ * Révoque et supprime définitivement un lien de signature distant dans la base en ligne.
+ */
+export async function revokeRemoteSignLink(token: string): Promise<boolean> {
+  if (!token) return true
+  try {
+    const response = await fetch(`/api/contracts/share?token=${encodeURIComponent(token)}`, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+    })
+    return response.ok
+  } catch (err) {
+    console.warn('Impossible de révoquer le lien distant :', err)
+    return false
+  }
+}

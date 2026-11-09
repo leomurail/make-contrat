@@ -156,6 +156,20 @@ export default function App() {
     setNotice({ text: 'Lien de signature créé et prêt à être envoyé.' })
   }
 
+  const handleTokenRevoked = async () => {
+    if (!activeContractId) return
+    const current = await db.contracts.get(activeContractId)
+    if (!current) return
+    const updated: ContractItem = {
+      ...current,
+      shareToken: undefined,
+      shareExpiresAt: undefined,
+      status: current.status === 'signed' ? 'signed' : 'draft',
+    }
+    await saveContract(updated)
+    setNotice({ text: 'Lien de signature supprimé avec succès.' })
+  }
+
   const handleNewContract = async () => {
     try {
       const created = await createNewContract(template)
@@ -189,7 +203,7 @@ export default function App() {
       if (activeContractId === id) {
         setActiveContractId(null)
       }
-      setNotice({ text: 'Contrat supprimé avec succès.' })
+      setNotice({ text: 'Contrat et lien de signature supprimés avec succès.' })
     } catch (e) {
       setNotice({ text: `Erreur lors de la suppression : ${(e as Error).message}`, error: true })
     }
@@ -290,6 +304,7 @@ export default function App() {
             contractNumero={activeContract.numero}
             shareToken={activeContract.shareToken}
             onTokenCreated={handleTokenCreated}
+            onTokenRevoked={handleTokenRevoked}
           />
         ) : (
           <ContractsDashboard

@@ -6,15 +6,17 @@ export const config = {
 }
 
 const MAX_BODY_BYTES = 5 * 1024 * 1024 // 5 Mo max
+const COMMON_HEADERS = {
+  'Content-Type': 'application/json',
+  'Cache-Control': 'no-store, private',
+}
 
 export default async function handler(request: Request) {
-  if (request.method !== 'POST') {
-    return new Response(JSON.stringify({ error: 'Méthode non autorisée. Utilisez POST.' }), {
+  const method = request.method
+  if (method !== 'POST' && method !== 'DELETE') {
+    return new Response(JSON.stringify({ error: 'Méthode non autorisée. Utilisez POST ou DELETE.' }), {
       status: 405,
-      headers: {
-        'Content-Type': 'application/json',
-        'Cache-Control': 'no-store, private',
-      },
+      headers: COMMON_HEADERS,
     })
   }
 
@@ -23,22 +25,7 @@ export default async function handler(request: Request) {
   if (secFetchSite && secFetchSite === 'cross-site') {
     return new Response(JSON.stringify({ error: 'Requête cross-origin non autorisée.' }), {
       status: 403,
-      headers: {
-        'Content-Type': 'application/json',
-        'Cache-Control': 'no-store, private',
-      },
-    })
-  }
-
-  // Vérification de la taille de la charge entrante
-  const contentLength = request.headers.get('content-length')
-  if (contentLength && parseInt(contentLength, 10) > MAX_BODY_BYTES) {
-    return new Response(JSON.stringify({ error: 'Contenu trop volumineux (limite 5 Mo).' }), {
-      status: 413,
-      headers: {
-        'Content-Type': 'application/json',
-        'Cache-Control': 'no-store, private',
-      },
+      headers: COMMON_HEADERS,
     })
   }
 
@@ -49,27 +36,78 @@ export default async function handler(request: Request) {
         error:
           'Base de données non configurée. Veuillez connecter Upstash Redis dans le tableau de bord Vercel (Storage > Upstash).',
       }),
-      {
-        status: 500,
-        headers: {
-          'Content-Type': 'application/json',
-          'Cache-Control': 'no-store, private',
-        },
-      },
+      { status: 500, headers: COMMON_HEADERS },
     )
+  }
+
+  const url = new URL(request.url)
+
+  // --- TRAITEMENT DU DELETE (Suppression du lien de signature distant) ---
+  if (method === 'DELETE') {
+    let token = url.searchParams.get('token')
+    if (!token && request.headers.get('content-type')?.includes('application/json')) {
+      try {
+        const body = await request.json()
+        token = body.token
+      } catch {
+        // Ignorer l'erreur de parsing body
+      }
+    }
+
+    if (!token) {
+      return new Response(JSON.stringify({ error: 'Jeton de signature manquant.' }), {
+        status: 400,
+        headers: COMMON_HEADERS,
+      })
+    }
+
+    await redis.del(`contract:${token}`)
+    return new Response(
+      JSON.stringify({
+        success: true,
+        message: 'Lien de signature supprimé avec succès.',
+      }),
+      { status: 200, headers: COMMON_HEADERS },
+    )
+  }
+
+  // --- TRAITEMENT DU POST ---
+  const contentLength = request.headers.get('content-length')
+  if (contentLength && parseInt(contentLength, 10) > MAX_BODY_BYTES) {
+    return new Response(JSON.stringify({ error: 'Contenu trop volumineux (limite 5 Mo).' }), {
+      status: 413,
+      headers: COMMON_HEADERS,
+    })
   }
 
   try {
     const body = await request.json()
+
+    // Fallback de suppression via POST pour les proxies filtrant DELETE
+    if (body.action === 'delete') {
+      const token = body.token || url.searchParams.get('token')
+      if (!token) {
+        return new Response(JSON.stringify({ error: 'Jeton de signature manquant.' }), {
+          status: 400,
+          headers: COMMON_HEADERS,
+        })
+      }
+      await redis.del(`contract:${token}`)
+      return new Response(
+        JSON.stringify({
+          success: true,
+          message: 'Lien de signature supprimé avec succès.',
+        }),
+        { status: 200, headers: COMMON_HEADERS },
+      )
+    }
+
     const { contractNumero, data } = body
 
     if (!data || typeof data !== 'object') {
       return new Response(JSON.stringify({ error: 'Données du contrat manquantes ou invalides.' }), {
         status: 400,
-        headers: {
-          'Content-Type': 'application/json',
-          'Cache-Control': 'no-store, private',
-        },
+        headers: COMMON_HEADERS,
       })
     }
 
@@ -101,10 +139,7 @@ export default async function handler(request: Request) {
       }),
       {
         status: 201,
-        headers: {
-          'Content-Type': 'application/json',
-          'Cache-Control': 'no-store, private',
-        },
+        headers: COMMON_HEADERS,
       },
     )
   } catch (error) {
@@ -113,10 +148,7 @@ export default async function handler(request: Request) {
       JSON.stringify({ error: 'Erreur lors de la génération du lien.' }),
       {
         status: 500,
-        headers: {
-          'Content-Type': 'application/json',
-          'Cache-Control': 'no-store, private',
-        },
+        headers: COMMON_HEADERS,
       },
     )
   }

@@ -10,6 +10,7 @@ interface Props {
   contractNumero?: string
   shareToken?: string
   onTokenCreated?: (token: string, expiresAt: string) => void
+  onTokenRevoked?: () => void
 }
 
 export function DualSignaturePanel({
@@ -18,6 +19,7 @@ export function DualSignaturePanel({
   contractNumero = '2026-001',
   shareToken,
   onTokenCreated,
+  onTokenRevoked,
 }: Props) {
   const [activeSigner, setActiveSigner] = useState<'beneficiaire' | 'photographe' | null>(null)
   const [showShareModal, setShowShareModal] = useState(false)
@@ -311,6 +313,9 @@ export function DualSignaturePanel({
           shareToken={shareToken}
           onTokenCreated={(tok, expiresAt) => {
             if (onTokenCreated) onTokenCreated(tok, expiresAt)
+          }}
+          onTokenRevoked={() => {
+            if (onTokenRevoked) onTokenRevoked()
           }}
           onContractSignedRemotely={(sig, date) => {
             const updates: Record<string, string> = {

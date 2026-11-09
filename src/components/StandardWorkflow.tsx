@@ -16,6 +16,7 @@ interface Props {
   contractNumero?: string
   shareToken?: string
   onTokenCreated?: (token: string, expiresAt: string) => void
+  onTokenRevoked?: () => void
 }
 
 export function StandardWorkflow({
@@ -28,6 +29,7 @@ export function StandardWorkflow({
   contractNumero,
   shareToken,
   onTokenCreated,
+  onTokenRevoked,
 }: Props) {
   // Mode Standard : étapes 0 (Photographe), 1 (Photos), 2 (Signatures), 3 (Aperçu & Rendu)
   const [standardStep, setStandardStep] = useState<0 | 1 | 2 | 3>(0)
@@ -400,6 +402,7 @@ export function StandardWorkflow({
                 contractNumero={contractNumero}
                 shareToken={shareToken}
                 onTokenCreated={onTokenCreated}
+                onTokenRevoked={onTokenRevoked}
               />
 
               <div className="step-navigation-actions">
@@ -653,6 +656,7 @@ export function StandardWorkflow({
                 contractNumero={contractNumero}
                 shareToken={shareToken}
                 onTokenCreated={onTokenCreated}
+                onTokenRevoked={onTokenRevoked}
               />
 
               <div className="step-navigation-actions">

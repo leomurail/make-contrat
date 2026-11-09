@@ -1,6 +1,7 @@
 import { db, type ContractItem, type ContractStatus } from './db'
 import { formatNumber, lastNumber, yearOf } from './archive'
 import type { DocData, DocTemplate } from './types'
+import { revokeRemoteSignLink } from './remoteSigning'
 
 const DEFAULT_BENEFICIAIRE_SIG_KEY = 'make-contrat:saved-beneficiaire-signature'
 
@@ -122,5 +123,14 @@ export async function duplicateContract(sourceId: number, template: DocTemplate)
 }
 
 export async function deleteContract(id: number): Promise<void> {
+  const contract = await db.contracts.get(id)
+  if (contract) {
+    const token = contract.shareToken || (contract.data as any)?.shareToken
+    if (token) {
+      await revokeRemoteSignLink(token).catch((err) => {
+        console.warn('Erreur lors de la suppression du lien distant :', err)
+      })
+    }
+  }
   await db.contracts.delete(id)
 }

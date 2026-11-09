@@ -1,12 +1,13 @@
 import { useState } from 'react'
 import type { DocData } from '../lib/types'
-import { createRemoteSignLink, checkRemoteContractStatus } from '../lib/remoteSigning'
+import { createRemoteSignLink, checkRemoteContractStatus, revokeRemoteSignLink } from '../lib/remoteSigning'
 
 interface Props {
   contractNumero: string
   data: DocData
   shareToken?: string
   onTokenCreated: (token: string, expiresAt: string) => void
+  onTokenRevoked?: () => void
   onContractSignedRemotely: (auteurSignature: string, dateSignature?: string) => void
   onClose: () => void
 }
@@ -16,12 +17,14 @@ export function ShareSignModal({
   data,
   shareToken: initialShareToken,
   onTokenCreated,
+  onTokenRevoked,
   onContractSignedRemotely,
   onClose,
 }: Props) {
   const [token, setToken] = useState<string | null>(initialShareToken || null)
   const [loading, setLoading] = useState(false)
   const [checking, setChecking] = useState(false)
+  const [revoking, setRevoking] = useState(false)
   const [copiedLink, setCopiedLink] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [checkStatusMessage, setCheckStatusMessage] = useState<string | null>(null)
@@ -39,6 +42,23 @@ export function ShareSignModal({
       setError((err as Error).message || 'Erreur lors de la création du lien.')
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handleRevokeLink = async () => {
+    if (!token) return
+    if (!confirm('Supprimer définitivement ce lien de signature ? Le photographe ne pourra plus accéder à cette page.')) {
+      return
+    }
+    try {
+      setRevoking(true)
+      await revokeRemoteSignLink(token)
+      setToken(null)
+      if (onTokenRevoked) onTokenRevoked()
+    } catch (err) {
+      setError((err as Error).message || 'Erreur lors de la suppression du lien.')
+    } finally {
+      setRevoking(false)
     }
   }
 
@@ -168,6 +188,18 @@ export function ShareSignModal({
         )}
 
         <div className="sig-modal-actions">
+          {token ? (
+            <button
+              type="button"
+              className="btn btn-ghost text-danger"
+              onClick={handleRevokeLink}
+              disabled={revoking}
+              title="Supprimer définitivement ce lien de signature"
+            >
+              <span className="material-symbols-rounded icon-xs">link_off</span>
+              <span>{revoking ? 'Suppression…' : 'Supprimer le lien'}</span>
+            </button>
+          ) : null}
           <div className="spacer" />
           <button type="button" className="btn btn-ghost" onClick={onClose}>
             Fermer
