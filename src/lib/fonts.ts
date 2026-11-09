@@ -23,7 +23,12 @@ Font.register({
 
 Font.register({
   family: HANDWRITING_FONT,
-  fonts: [{ src: caveatSemiBold, fontWeight: 600 }],
+  fonts: [
+    { src: caveatSemiBold, fontWeight: 400 },
+    { src: caveatSemiBold, fontWeight: 600 },
+    { src: caveatSemiBold, fontWeight: 'normal' },
+    { src: caveatSemiBold, fontWeight: 'bold' },
+  ],
 })
 
 // Pas de césure automatique (les règles par défaut sont anglaises).

@@ -9,7 +9,7 @@ import { parsePhotoItems } from '../lib/format'
 interface Props {
   template: DocTemplate
   data: DocData
-  onChange: (key: string, value: string) => void
+  onChange: (keyOrUpdates: string | Record<string, string>, value?: string) => void
   onSaveAndBack: () => void
   onDownloadPdf: () => Promise<void>
   onDownloadDocx?: () => Promise<void>

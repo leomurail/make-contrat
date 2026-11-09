@@ -6,7 +6,7 @@ import { ShareSignModal } from './ShareSignModal'
 
 interface Props {
   data: DocData
-  onChange: (key: string, value: string) => void
+  onChange: (keyOrUpdates: string | Record<string, string>, value?: string) => void
   contractNumero?: string
   shareToken?: string
   onTokenCreated?: (token: string, expiresAt: string) => void
@@ -22,6 +22,7 @@ export function DualSignaturePanel({
   const [activeSigner, setActiveSigner] = useState<'beneficiaire' | 'photographe' | null>(null)
   const [showShareModal, setShowShareModal] = useState(false)
   const [rememberBeneficiaire, setRememberBeneficiaire] = useState(true)
+  const [savedBeneficiaireSig, setSavedBeneficiaireSig] = useState<string>(() => getSavedBeneficiaireSignature())
 
   const hasBeneficiaire = Boolean(data.cessionnaireSignature && data.cessionnaireSignature.trim() !== '')
   const hasAuteur = Boolean(data.auteurSignature && data.auteurSignature.trim() !== '')
@@ -29,12 +30,12 @@ export function DualSignaturePanel({
   const onUseSavedBeneficiaire = () => {
     const saved = getSavedBeneficiaireSignature()
     if (saved) {
-      onChange('cessionnaireSignature', saved)
-      onChange('cessionnaireLuApprouve', 'true')
+      onChange({
+        cessionnaireSignature: saved,
+        cessionnaireLuApprouve: 'true',
+      })
     }
   }
-
-  const savedBeneficiaireSig = getSavedBeneficiaireSignature()
 
   return (
     <div className="dual-signature-section">
@@ -117,8 +118,10 @@ export function DualSignaturePanel({
                     type="button"
                     className="btn btn-small btn-ghost text-danger"
                     onClick={() => {
-                      onChange('cessionnaireSignature', '')
-                      onChange('cessionnaireLuApprouve', '')
+                      onChange({
+                        cessionnaireSignature: '',
+                        cessionnaireLuApprouve: '',
+                      })
                     }}
                   >
                     Effacer la signature
@@ -145,14 +148,28 @@ export function DualSignaturePanel({
                     <span>Signer à l'écran</span>
                   </button>
                   {savedBeneficiaireSig && !hasBeneficiaire ? (
-                    <button
-                      type="button"
-                      className="btn btn-small btn-ghost"
-                      onClick={onUseSavedBeneficiaire}
-                      title="Utiliser votre signature habituelle mémorisée"
-                    >
-                      Utiliser ma signature habituelle
-                    </button>
+                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                      <button
+                        type="button"
+                        className="btn btn-small btn-ghost"
+                        onClick={onUseSavedBeneficiaire}
+                        title="Utiliser votre signature habituelle mémorisée"
+                      >
+                        Utiliser ma signature habituelle
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-small btn-ghost text-dim"
+                        onClick={() => {
+                          saveBeneficiaireSignature('')
+                          setSavedBeneficiaireSig('')
+                        }}
+                        title="Supprimer la signature habituelle mémorisée"
+                        aria-label="Supprimer la signature habituelle"
+                      >
+                        <span className="material-symbols-rounded icon-xs">delete</span>
+                      </button>
+                    </div>
                   ) : null}
                 </div>
               </div>
@@ -197,8 +214,10 @@ export function DualSignaturePanel({
                     type="button"
                     className="btn btn-small btn-ghost text-danger"
                     onClick={() => {
-                      onChange('auteurSignature', '')
-                      onChange('auteurLuApprouve', '')
+                      onChange({
+                        auteurSignature: '',
+                        auteurLuApprouve: '',
+                      })
                     }}
                   >
                     Effacer la signature
@@ -264,14 +283,19 @@ export function DualSignaturePanel({
           onToggleRemember={setRememberBeneficiaire}
           onSave={(dataUrl) => {
             if (activeSigner === 'beneficiaire') {
-              onChange('cessionnaireSignature', dataUrl)
-              onChange('cessionnaireLuApprouve', 'true')
+              onChange({
+                cessionnaireSignature: dataUrl,
+                cessionnaireLuApprouve: 'true',
+              })
               if (rememberBeneficiaire) {
                 saveBeneficiaireSignature(dataUrl)
+                setSavedBeneficiaireSig(dataUrl)
               }
             } else {
-              onChange('auteurSignature', dataUrl)
-              onChange('auteurLuApprouve', 'true')
+              onChange({
+                auteurSignature: dataUrl,
+                auteurLuApprouve: 'true',
+              })
             }
             setActiveSigner(null)
           }}
@@ -289,9 +313,12 @@ export function DualSignaturePanel({
             if (onTokenCreated) onTokenCreated(tok, expiresAt)
           }}
           onContractSignedRemotely={(sig, date) => {
-            onChange('auteurSignature', sig)
-            onChange('auteurLuApprouve', 'true')
-            if (date) onChange('dateSignature', date)
+            const updates: Record<string, string> = {
+              auteurSignature: sig,
+              auteurLuApprouve: 'true',
+            }
+            if (date) updates.dateSignature = date
+            onChange(updates)
             setShowShareModal(false)
           }}
           onClose={() => setShowShareModal(false)}

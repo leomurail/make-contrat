@@ -1,6 +1,6 @@
 import { pdf } from '@react-pdf/renderer'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { ContractsDashboard } from './components/ContractsDashboard'
 import { StandardWorkflow } from './components/StandardWorkflow'
 import { PublicSignPage } from './components/PublicSignPage'
@@ -110,24 +110,47 @@ export default function App() {
     }
   }, [contracts])
 
-  // Sauvegarde automatique des modifications apportées au contrat actif
-  const updateContractField = async (key: string, value: string) => {
-    if (!activeContract) return
-    const updatedData = { ...activeContract.data, [key]: value }
-    const updatedContract: ContractItem = {
-      ...activeContract,
-      data: updatedData,
-    }
-    await saveContract(updatedContract)
+  // File d'attente d'enregistrement séquentiel pour éliminer tout risque d'écrasement ou de race condition
+  const updateQueueRef = useRef<Promise<void>>(Promise.resolve())
+
+  const updateContractField = (
+    keyOrUpdates: string | Record<string, string>,
+    maybeValue?: string,
+  ) => {
+    if (!activeContractId) return Promise.resolve()
+
+    const updates: Record<string, string> =
+      typeof keyOrUpdates === 'string'
+        ? { [keyOrUpdates]: maybeValue ?? '' }
+        : keyOrUpdates
+
+    updateQueueRef.current = updateQueueRef.current
+      .then(async () => {
+        const current = await db.contracts.get(activeContractId)
+        if (!current) return
+        const updatedData = { ...current.data, ...updates }
+        const updatedContract: ContractItem = {
+          ...current,
+          data: updatedData,
+        }
+        await saveContract(updatedContract)
+      })
+      .catch((err) => {
+        console.error('Erreur lors de la sauvegarde du contrat :', err)
+      })
+
+    return updateQueueRef.current
   }
 
   const handleTokenCreated = async (token: string, expiresAt: string) => {
-    if (!activeContract) return
+    if (!activeContractId) return
+    const current = await db.contracts.get(activeContractId)
+    if (!current) return
     const updated: ContractItem = {
-      ...activeContract,
+      ...current,
       shareToken: token,
       shareExpiresAt: expiresAt,
-      status: activeContract.status === 'signed' ? 'signed' : 'pending_photographer',
+      status: current.status === 'signed' ? 'signed' : 'pending_photographer',
     }
     await saveContract(updated)
     setNotice({ text: 'Lien de signature créé et prêt à être envoyé.' })
