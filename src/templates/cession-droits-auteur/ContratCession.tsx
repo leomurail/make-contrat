@@ -32,18 +32,63 @@ const s = StyleSheet.create({
 
   runningFooter: {
     position: 'absolute',
-    bottom: 16,
+    bottom: 14,
     left: 44,
     right: 44,
     flexDirection: 'row',
     justifyContent: 'space-between',
+    alignItems: 'center',
     borderTopWidth: 0.5,
-    borderTopColor: '#cccccc',
+    borderTopColor: '#cbd5e1',
     paddingTop: 3,
   },
   footerText: {
-    fontSize: 7.5,
-    color: '#555555',
+    fontSize: 7.2,
+    color: '#64748b',
+  },
+  footerParaphesGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  footerParapheLabel: {
+    fontSize: 6.8,
+    fontFamily: 'Helvetica-Bold',
+    color: '#475569',
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+  },
+  footerParaphesCards: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  footerParapheItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 0.6,
+    borderColor: '#cbd5e1',
+    borderRadius: 2.5,
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+    backgroundColor: '#f8fafc',
+    gap: 3,
+  },
+  footerParapheParty: {
+    fontSize: 6.2,
+    color: '#64748b',
+    fontFamily: 'Helvetica',
+  },
+  footerParapheSig: {
+    fontFamily: 'Caveat',
+    fontSize: 10.5,
+    color: '#1e3a8a',
+    lineHeight: 1,
+  },
+  footerParaphePending: {
+    fontSize: 6.5,
+    color: '#94a3b8',
+    fontFamily: 'Helvetica-Oblique',
   },
 
   // En-tête sobre et textuel
@@ -159,51 +204,29 @@ const s = StyleSheet.create({
     fontSize: 8.4,
     marginBottom: 2,
   },
-  signatureMention: {
-    fontFamily: 'Helvetica-Oblique',
+  signatureLabel: {
     fontSize: 8,
-    color: '#222222',
-    marginTop: 2,
-    marginBottom: 5,
-  },
-  signatureApprovalRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 2,
-    marginBottom: 4,
-  },
-  checkboxBox: {
-    width: 9,
-    height: 9,
-    borderWidth: 0.8,
-    borderColor: '#0f172a',
-    borderRadius: 1.5,
-    marginRight: 5,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  checkboxChecked: {
-    backgroundColor: '#0f172a',
-  },
-  checkboxInnerCheck: {
-    color: '#ffffff',
-    fontSize: 7,
     fontFamily: 'Helvetica-Bold',
-    lineHeight: 8,
+    color: '#1e293b',
+    marginTop: 3,
+    marginBottom: 1,
   },
   signatureHandwrittenMention: {
     fontFamily: 'Caveat',
-    fontSize: 12,
+    fontSize: 13,
     color: '#1e3a8a',
+    marginBottom: 2,
   },
   signaturePlaceholderMention: {
     fontFamily: 'Helvetica-Oblique',
-    fontSize: 7.8,
-    color: '#555555',
+    fontSize: 8,
+    color: '#64748b',
+    marginBottom: 2,
   },
   signatureArea: {
     height: 48,
     justifyContent: 'flex-start',
+    marginTop: 2,
   },
   signatureImg: {
     maxHeight: 46,
@@ -262,6 +285,68 @@ function PartyLine({ label, value }: { label: string; value?: string }) {
   )
 }
 
+function extractInitials(name?: string, fallback = '…'): string {
+  if (!name || !name.trim()) return fallback
+  const cleaned = name
+    .replace(/\b(EI|EIRL|SARL|SAS|SASU|EURL|SA|SCI)\b/gi, '')
+    .replace(/[^a-zA-ZÀ-ÿ\s-]/g, '')
+    .trim()
+  const words = cleaned.split(/[\s-]+/).filter(Boolean)
+  if (words.length === 0) return fallback
+  if (words.length === 1) {
+    const w = words[0]
+    return w.length >= 2 ? w.slice(0, 2).toUpperCase() : `${w[0].toUpperCase()}.`
+  }
+  return words.slice(0, 3).map((w) => w[0].toUpperCase()).join('')
+}
+
+function RunningFooter({
+  numContrat,
+  benefInitials,
+  auteurInitials,
+  hasCessionnaireSig,
+  hasAuteurSig,
+}: {
+  numContrat: string
+  benefInitials: string
+  auteurInitials: string
+  hasCessionnaireSig: boolean
+  hasAuteurSig: boolean
+}) {
+  return (
+    <View fixed style={s.runningFooter}>
+      <Text style={s.footerText}>Réf. {numContrat}</Text>
+
+      <View style={s.footerParaphesGroup}>
+        <Text style={s.footerParapheLabel}>Paraphes :</Text>
+        <View style={s.footerParaphesCards}>
+          <View style={s.footerParapheItem}>
+            <Text style={s.footerParapheParty}>Bénéficiaire :</Text>
+            {hasCessionnaireSig ? (
+              <Text style={s.footerParapheSig}>{benefInitials}</Text>
+            ) : (
+              <Text style={s.footerParaphePending}>……</Text>
+            )}
+          </View>
+          <View style={s.footerParapheItem}>
+            <Text style={s.footerParapheParty}>Auteur :</Text>
+            {hasAuteurSig ? (
+              <Text style={s.footerParapheSig}>{auteurInitials}</Text>
+            ) : (
+              <Text style={s.footerParaphePending}>……</Text>
+            )}
+          </View>
+        </View>
+      </View>
+
+      <Text
+        style={s.footerText}
+        render={({ pageNumber, totalPages }) => `Page ${pageNumber} / ${totalPages}`}
+      />
+    </View>
+  )
+}
+
 export function ContratCession({ data }: Props) {
   const cleanInstagram = (data.auteurInstagram || '').replace(/^@+/, '').trim()
   const { useSite, useSocial } = parseSupportFlags(data.supportsAutorises)
@@ -293,6 +378,12 @@ export function ContratCession({ data }: Props) {
   const hasAuteurSig = Boolean(data.auteurSignature && data.auteurSignature.trim() !== '')
   const hasCessionnaireSig = Boolean(data.cessionnaireSignature && data.cessionnaireSignature.trim() !== '')
 
+  const benefInitials = extractInitials(
+    data.cessionnaireRepresentant || data.cessionnaireDenomination,
+    'LJ',
+  )
+  const auteurInitials = extractInitials(data.auteurNom, 'Auteur')
+
   const hasSeparateAnnexe = photoItems.length > 0 || publicationsList.length > 6
 
   const creditText = cleanInstagram
@@ -312,13 +403,13 @@ export function ContratCession({ data }: Props) {
           PAGE 1 : TEXTE DU CONTRAT (PARTIES SUR PLUSIEURS LIGNES, PRÉAMBULE, ART. 1-4)
       ========================================================================= */}
       <Page size="A4" style={s.page}>
-        <View fixed style={s.runningFooter}>
-          <Text style={s.footerText}>Contrat de cession de droits photographiques — Réf. {numContrat}</Text>
-          <Text
-            style={s.footerText}
-            render={({ pageNumber, totalPages }) => `Page ${pageNumber} / ${totalPages}`}
-          />
-        </View>
+        <RunningFooter
+          numContrat={numContrat}
+          benefInitials={benefInitials}
+          auteurInitials={auteurInitials}
+          hasCessionnaireSig={hasCessionnaireSig}
+          hasAuteurSig={hasAuteurSig}
+        />
 
         {/* Titre sobre */}
         <View style={s.docHeader}>
@@ -476,13 +567,13 @@ export function ContratCession({ data }: Props) {
           <Text style={s.runningHeaderText}>Réf. {numContrat}</Text>
         </View>
 
-        <View fixed style={s.runningFooter}>
-          <Text style={s.footerText}>Contrat de cession de droits photographiques — Réf. {numContrat}</Text>
-          <Text
-            style={s.footerText}
-            render={({ pageNumber, totalPages }) => `Page ${pageNumber} / ${totalPages}`}
-          />
-        </View>
+        <RunningFooter
+          numContrat={numContrat}
+          benefInitials={benefInitials}
+          auteurInitials={auteurInitials}
+          hasCessionnaireSig={hasCessionnaireSig}
+          hasAuteurSig={hasAuteurSig}
+        />
 
         {/* Article 5 */}
         <Text style={[s.articleHeading, { marginTop: 4 }]}>Article 5 – Conditions financières</Text>
@@ -545,18 +636,19 @@ export function ContratCession({ data }: Props) {
             <View style={s.signatureCol}>
               <Text style={s.signatureColTitle}>Pour l’Auteur (Le Photographe)</Text>
               <Text style={s.signatureMeta}>Nom : {data.auteurNom?.trim() || '…………………………………………'}</Text>
-              <View style={s.signatureApprovalRow}>
-                <View style={[s.checkboxBox, hasAuteurSig ? s.checkboxChecked : {}]}>
-                  {hasAuteurSig ? <Text style={s.checkboxInnerCheck}>✓</Text> : null}
-                </View>
-                {hasAuteurSig ? (
-                  <Text style={s.signatureHandwrittenMention}>Lu et approuvé, bon pour accord</Text>
-                ) : (
-                  <Text style={s.signaturePlaceholderMention}>« Lu et approuvé, bon pour accord »</Text>
-                )}
-              </View>
+              <Text style={s.signatureLabel}>Mention « Lu et approuvé » :</Text>
+              {hasAuteurSig ? (
+                <Text style={s.signatureHandwrittenMention}>Lu et approuvé, bon pour accord</Text>
+              ) : (
+                <Text style={s.signaturePlaceholderMention}>« Lu et approuvé, bon pour accord »</Text>
+              )}
+              <Text style={s.signatureLabel}>Signature :</Text>
               <View style={s.signatureArea}>
-                {data.auteurSignature ? <Image style={s.signatureImg} src={data.auteurSignature} /> : null}
+                {hasAuteurSig ? (
+                  <Image style={s.signatureImg} src={data.auteurSignature} />
+                ) : (
+                  <Text style={s.signaturePlaceholderMention}>…………………………………………</Text>
+                )}
               </View>
             </View>
 
@@ -564,20 +656,21 @@ export function ContratCession({ data }: Props) {
             <View style={s.signatureCol}>
               <Text style={s.signatureColTitle}>Pour le Bénéficiaire</Text>
               <Text style={s.signatureMeta}>
-                {`${data.cessionnaireDenomination?.trim() || 'Évasion Littorale'}${data.cessionnaireRepresentant?.trim() ? ` — ${data.cessionnaireRepresentant.trim()}` : ''}`}
+                {`Nom : ${data.cessionnaireDenomination?.trim() || 'Évasion Littorale'}${data.cessionnaireRepresentant?.trim() ? ` — ${data.cessionnaireRepresentant.trim()}` : ''}`}
               </Text>
-              <View style={s.signatureApprovalRow}>
-                <View style={[s.checkboxBox, hasCessionnaireSig ? s.checkboxChecked : {}]}>
-                  {hasCessionnaireSig ? <Text style={s.checkboxInnerCheck}>✓</Text> : null}
-                </View>
-                {hasCessionnaireSig ? (
-                  <Text style={s.signatureHandwrittenMention}>Lu et approuvé, bon pour accord</Text>
-                ) : (
-                  <Text style={s.signaturePlaceholderMention}>« Lu et approuvé, bon pour accord »</Text>
-                )}
-              </View>
+              <Text style={s.signatureLabel}>Mention « Lu et approuvé » :</Text>
+              {hasCessionnaireSig ? (
+                <Text style={s.signatureHandwrittenMention}>Lu et approuvé, bon pour accord</Text>
+              ) : (
+                <Text style={s.signaturePlaceholderMention}>« Lu et approuvé, bon pour accord »</Text>
+              )}
+              <Text style={s.signatureLabel}>Signature :</Text>
               <View style={s.signatureArea}>
-                {data.cessionnaireSignature ? <Image style={s.signatureImg} src={data.cessionnaireSignature} /> : null}
+                {hasCessionnaireSig ? (
+                  <Image style={s.signatureImg} src={data.cessionnaireSignature} />
+                ) : (
+                  <Text style={s.signaturePlaceholderMention}>…………………………………………</Text>
+                )}
               </View>
             </View>
           </View>
@@ -594,13 +687,13 @@ export function ContratCession({ data }: Props) {
             <Text style={s.runningHeaderText}>Réf. {numContrat}</Text>
           </View>
 
-          <View fixed style={s.runningFooter}>
-            <Text style={s.footerText}>Contrat de cession de droits photographiques — Réf. {numContrat}</Text>
-            <Text
-              style={s.footerText}
-              render={({ pageNumber, totalPages }) => `Page ${pageNumber} / ${totalPages}`}
-            />
-          </View>
+          <RunningFooter
+            numContrat={numContrat}
+            benefInitials={benefInitials}
+            auteurInitials={auteurInitials}
+            hasCessionnaireSig={hasCessionnaireSig}
+            hasAuteurSig={hasAuteurSig}
+          />
 
           <Text style={[s.sectionTitle, { marginTop: 4 }]}>Annexe 1 – Photographies / Captures de référence</Text>
           <Text style={s.paragraph}>

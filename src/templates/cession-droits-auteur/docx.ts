@@ -90,6 +90,21 @@ function bulletPara(boldPrefix: string, text: string): Paragraph {
   })
 }
 
+function extractInitials(name?: string, fallback = '…'): string {
+  if (!name || !name.trim()) return fallback
+  const cleaned = name
+    .replace(/\b(EI|EIRL|SARL|SAS|SASU|EURL|SA|SCI)\b/gi, '')
+    .replace(/[^a-zA-ZÀ-ÿ\s-]/g, '')
+    .trim()
+  const words = cleaned.split(/[\s-]+/).filter(Boolean)
+  if (words.length === 0) return fallback
+  if (words.length === 1) {
+    const w = words[0]
+    return w.length >= 2 ? w.slice(0, 2).toUpperCase() : `${w[0].toUpperCase()}.`
+  }
+  return words.slice(0, 3).map((w) => w[0].toUpperCase()).join('')
+}
+
 export async function generateContratCessionDocx(data: ContratCessionData): Promise<Blob> {
   const cleanInstagram = (data.auteurInstagram || '').replace(/^@+/, '').trim()
   const { useSite, useSocial } = parseSupportFlags(data.supportsAutorises)
@@ -108,6 +123,12 @@ export async function generateContratCessionDocx(data: ContratCessionData): Prom
       ? data.numero
       : `CTR-${data.numero}`
     : 'Brouillon'
+
+  const benefInitials = extractInitials(
+    data.cessionnaireRepresentant || data.cessionnaireDenomination,
+    'LJ',
+  )
+  const auteurInitials = extractInitials(data.auteurNom, 'Auteur')
 
   const dureeChiffres = (data.dureeAnnees || '10').trim()
   const dureeMots = yearsToWords(dureeChiffres)
@@ -144,24 +165,31 @@ export async function generateContratCessionDocx(data: ContratCessionData): Prom
             margins: { top: 80, bottom: 80, left: 0, right: 160 },
             children: [
               new Paragraph({
-                spacing: { after: 60 },
+                spacing: { after: 40 },
                 children: [new TextRun({ text: 'POUR L’AUTEUR (LE PHOTOGRAPHE)', bold: true, size: 19 })],
               }),
               new Paragraph({
-                spacing: { after: 60 },
+                spacing: { after: 40 },
                 children: [new TextRun({ text: `Nom : ${data.auteurNom?.trim() || '…………………………………………'}`, size: 19 })],
               }),
               new Paragraph({
-                spacing: { after: auteurSigImg ? 80 : 720 },
+                spacing: { after: 20 },
+                children: [new TextRun({ text: 'Mention « Lu et approuvé » :', bold: true, size: 18 })],
+              }),
+              new Paragraph({
+                spacing: { after: 40 },
                 children: [
                   new TextRun({
-                    text: (auteurSigImg ? '☑ ' : '☐ ') + '« Lu et approuvé, bon pour accord »',
-                    bold: Boolean(auteurSigImg),
+                    text: 'Lu et approuvé, bon pour accord',
                     italics: true,
-                    color: auteurSigImg ? '1e3a8a' : '555555',
+                    color: auteurSigImg ? '1e3a8a' : '64748b',
                     size: 19,
                   }),
                 ],
+              }),
+              new Paragraph({
+                spacing: { after: 40 },
+                children: [new TextRun({ text: 'Signature :', bold: true, size: 18 })],
               }),
               ...(auteurSigImg
                 ? [
@@ -180,7 +208,12 @@ export async function generateContratCessionDocx(data: ContratCessionData): Prom
                       ],
                     }),
                   ]
-                : []),
+                : [
+                    new Paragraph({
+                      spacing: { after: 400 },
+                      children: [new TextRun({ text: '…………………………………………', color: '64748b', size: 19 })],
+                    }),
+                  ]),
             ],
           }),
           new TableCell({
@@ -189,29 +222,36 @@ export async function generateContratCessionDocx(data: ContratCessionData): Prom
             margins: { top: 80, bottom: 80, left: 160, right: 0 },
             children: [
               new Paragraph({
-                spacing: { after: 60 },
+                spacing: { after: 40 },
                 children: [new TextRun({ text: 'POUR LE BÉNÉFICIAIRE', bold: true, size: 19 })],
               }),
               new Paragraph({
-                spacing: { after: 60 },
+                spacing: { after: 40 },
                 children: [
                   new TextRun({
-                    text: `${data.cessionnaireDenomination?.trim() || 'Évasion Littorale'}${data.cessionnaireRepresentant?.trim() ? ` — ${data.cessionnaireRepresentant.trim()}` : ''}`,
+                    text: `Nom : ${data.cessionnaireDenomination?.trim() || 'Évasion Littorale'}${data.cessionnaireRepresentant?.trim() ? ` — ${data.cessionnaireRepresentant.trim()}` : ''}`,
                     size: 19,
                   }),
                 ],
               }),
               new Paragraph({
-                spacing: { after: cessionnaireSigImg ? 80 : 720 },
+                spacing: { after: 20 },
+                children: [new TextRun({ text: 'Mention « Lu et approuvé » :', bold: true, size: 18 })],
+              }),
+              new Paragraph({
+                spacing: { after: 40 },
                 children: [
                   new TextRun({
-                    text: (cessionnaireSigImg ? '☑ ' : '☐ ') + '« Lu et approuvé, bon pour accord »',
-                    bold: Boolean(cessionnaireSigImg),
+                    text: 'Lu et approuvé, bon pour accord',
                     italics: true,
-                    color: cessionnaireSigImg ? '1e3a8a' : '555555',
+                    color: cessionnaireSigImg ? '1e3a8a' : '64748b',
                     size: 19,
                   }),
                 ],
+              }),
+              new Paragraph({
+                spacing: { after: 40 },
+                children: [new TextRun({ text: 'Signature :', bold: true, size: 18 })],
               }),
               ...(cessionnaireSigImg
                 ? [
@@ -230,7 +270,12 @@ export async function generateContratCessionDocx(data: ContratCessionData): Prom
                       ],
                     }),
                   ]
-                : []),
+                : [
+                    new Paragraph({
+                      spacing: { after: 400 },
+                      children: [new TextRun({ text: '…………………………………………', color: '64748b', size: 19 })],
+                    }),
+                  ]),
             ],
           }),
         ],
@@ -320,18 +365,27 @@ export async function generateContratCessionDocx(data: ContratCessionData): Prom
           default: new Footer({
             children: [
               new Paragraph({
-                tabStops: [{ type: TabStopType.RIGHT, position: TabStopPosition.MAX }],
+                tabStops: [
+                  { type: TabStopType.CENTER, position: 4800 },
+                  { type: TabStopType.RIGHT, position: TabStopPosition.MAX },
+                ],
                 border: { top: { style: BorderStyle.SINGLE, size: 4, color: 'CCCCCC', space: 4 } },
                 children: [
                   new TextRun({
-                    text: `Contrat de cession de droits photographiques — Réf. ${numContrat}`,
-                    size: 16,
+                    text: `Réf. ${numContrat}`,
+                    size: 15,
                     color: '555555',
                   }),
-                  new TextRun({ text: '\tPage ', size: 16, color: '555555' }),
-                  new TextRun({ children: [PageNumber.CURRENT], size: 16, color: '555555' }),
-                  new TextRun({ text: ' / ', size: 16, color: '555555' }),
-                  new TextRun({ children: [PageNumber.TOTAL_PAGES], size: 16, color: '555555' }),
+                  new TextRun({
+                    text: `\tParaphes : [ Bénéficiaire : ${cessionnaireSigImg ? benefInitials : '……'} ]  [ Auteur : ${auteurSigImg ? auteurInitials : '……'} ]`,
+                    size: 15,
+                    color: cessionnaireSigImg || auteurSigImg ? '1e3a8a' : '64748b',
+                    bold: Boolean(cessionnaireSigImg || auteurSigImg),
+                  }),
+                  new TextRun({ text: '\tPage ', size: 15, color: '555555' }),
+                  new TextRun({ children: [PageNumber.CURRENT], size: 15, color: '555555' }),
+                  new TextRun({ text: ' / ', size: 15, color: '555555' }),
+                  new TextRun({ children: [PageNumber.TOTAL_PAGES], size: 15, color: '555555' }),
                 ],
               }),
             ],
