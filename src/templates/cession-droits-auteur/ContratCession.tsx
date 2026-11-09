@@ -636,7 +636,7 @@ export function ContratCession({ data }: Props) {
             <View style={s.signatureCol}>
               <Text style={s.signatureColTitle}>Pour l’Auteur (Le Photographe)</Text>
               <Text style={s.signatureMeta}>Nom : {data.auteurNom?.trim() || '…………………………………………'}</Text>
-              <Text style={s.signatureLabel}>Mention « Lu et approuvé » :</Text>
+              <Text style={s.signatureLabel}>Mention « Lu et approuvé, bon pour accord » :</Text>
               {hasAuteurSig ? (
                 <Text style={s.signatureHandwrittenMention}>Lu et approuvé, bon pour accord</Text>
               ) : (
@@ -658,7 +658,7 @@ export function ContratCession({ data }: Props) {
               <Text style={s.signatureMeta}>
                 {`Nom : ${data.cessionnaireDenomination?.trim() || 'Évasion Littorale'}${data.cessionnaireRepresentant?.trim() ? ` — ${data.cessionnaireRepresentant.trim()}` : ''}`}
               </Text>
-              <Text style={s.signatureLabel}>Mention « Lu et approuvé » :</Text>
+              <Text style={s.signatureLabel}>Mention « Lu et approuvé, bon pour accord » :</Text>
               {hasCessionnaireSig ? (
                 <Text style={s.signatureHandwrittenMention}>Lu et approuvé, bon pour accord</Text>
               ) : (

@@ -174,7 +174,7 @@ export async function generateContratCessionDocx(data: ContratCessionData): Prom
               }),
               new Paragraph({
                 spacing: { after: 20 },
-                children: [new TextRun({ text: 'Mention « Lu et approuvé » :', bold: true, size: 18 })],
+                children: [new TextRun({ text: 'Mention « Lu et approuvé, bon pour accord » :', bold: true, size: 18 })],
               }),
               new Paragraph({
                 spacing: { after: 40 },
@@ -236,7 +236,7 @@ export async function generateContratCessionDocx(data: ContratCessionData): Prom
               }),
               new Paragraph({
                 spacing: { after: 20 },
-                children: [new TextRun({ text: 'Mention « Lu et approuvé » :', bold: true, size: 18 })],
+                children: [new TextRun({ text: 'Mention « Lu et approuvé, bon pour accord » :', bold: true, size: 18 })],
               }),
               new Paragraph({
                 spacing: { after: 40 },
