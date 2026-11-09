@@ -304,14 +304,10 @@ function RunningFooter({
   numContrat,
   benefInitials,
   auteurInitials,
-  hasCessionnaireSig,
-  hasAuteurSig,
 }: {
   numContrat: string
   benefInitials: string
   auteurInitials: string
-  hasCessionnaireSig: boolean
-  hasAuteurSig: boolean
 }) {
   return (
     <View fixed style={s.runningFooter}>
@@ -322,19 +318,11 @@ function RunningFooter({
         <View style={s.footerParaphesCards}>
           <View style={s.footerParapheItem}>
             <Text style={s.footerParapheParty}>Bénéficiaire :</Text>
-            {hasCessionnaireSig ? (
-              <Text style={s.footerParapheSig}>{benefInitials}</Text>
-            ) : (
-              <Text style={s.footerParaphePending}>……</Text>
-            )}
+            <Text style={s.footerParapheSig}>{benefInitials}</Text>
           </View>
           <View style={s.footerParapheItem}>
             <Text style={s.footerParapheParty}>Auteur :</Text>
-            {hasAuteurSig ? (
-              <Text style={s.footerParapheSig}>{auteurInitials}</Text>
-            ) : (
-              <Text style={s.footerParaphePending}>……</Text>
-            )}
+            <Text style={s.footerParapheSig}>{auteurInitials}</Text>
           </View>
         </View>
       </View>
@@ -407,8 +395,6 @@ export function ContratCession({ data }: Props) {
           numContrat={numContrat}
           benefInitials={benefInitials}
           auteurInitials={auteurInitials}
-          hasCessionnaireSig={hasCessionnaireSig}
-          hasAuteurSig={hasAuteurSig}
         />
 
         {/* Titre sobre */}
@@ -571,8 +557,6 @@ export function ContratCession({ data }: Props) {
           numContrat={numContrat}
           benefInitials={benefInitials}
           auteurInitials={auteurInitials}
-          hasCessionnaireSig={hasCessionnaireSig}
-          hasAuteurSig={hasAuteurSig}
         />
 
         {/* Article 5 */}
@@ -637,11 +621,7 @@ export function ContratCession({ data }: Props) {
               <Text style={s.signatureColTitle}>Pour l’Auteur (Le Photographe)</Text>
               <Text style={s.signatureMeta}>Nom : {data.auteurNom?.trim() || '…………………………………………'}</Text>
               <Text style={s.signatureLabel}>Mention « Lu et approuvé, bon pour accord » :</Text>
-              {hasAuteurSig ? (
-                <Text style={s.signatureHandwrittenMention}>Lu et approuvé, bon pour accord</Text>
-              ) : (
-                <Text style={s.signaturePlaceholderMention}>« Lu et approuvé, bon pour accord »</Text>
-              )}
+              <Text style={s.signatureHandwrittenMention}>Lu et approuvé, bon pour accord</Text>
               <Text style={s.signatureLabel}>Signature :</Text>
               <View style={s.signatureArea}>
                 {hasAuteurSig ? (
@@ -659,11 +639,7 @@ export function ContratCession({ data }: Props) {
                 {`Nom : ${data.cessionnaireDenomination?.trim() || 'Évasion Littorale'}${data.cessionnaireRepresentant?.trim() ? ` — ${data.cessionnaireRepresentant.trim()}` : ''}`}
               </Text>
               <Text style={s.signatureLabel}>Mention « Lu et approuvé, bon pour accord » :</Text>
-              {hasCessionnaireSig ? (
-                <Text style={s.signatureHandwrittenMention}>Lu et approuvé, bon pour accord</Text>
-              ) : (
-                <Text style={s.signaturePlaceholderMention}>« Lu et approuvé, bon pour accord »</Text>
-              )}
+              <Text style={s.signatureHandwrittenMention}>Lu et approuvé, bon pour accord</Text>
               <Text style={s.signatureLabel}>Signature :</Text>
               <View style={s.signatureArea}>
                 {hasCessionnaireSig ? (
@@ -691,8 +667,6 @@ export function ContratCession({ data }: Props) {
             numContrat={numContrat}
             benefInitials={benefInitials}
             auteurInitials={auteurInitials}
-            hasCessionnaireSig={hasCessionnaireSig}
-            hasAuteurSig={hasAuteurSig}
           />
 
           <Text style={[s.sectionTitle, { marginTop: 4 }]}>Annexe 1 – Photographies / Captures de référence</Text>

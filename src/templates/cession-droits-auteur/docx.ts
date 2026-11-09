@@ -377,10 +377,10 @@ export async function generateContratCessionDocx(data: ContratCessionData): Prom
                     color: '555555',
                   }),
                   new TextRun({
-                    text: `\tParaphes : [ Bénéficiaire : ${cessionnaireSigImg ? benefInitials : '……'} ]  [ Auteur : ${auteurSigImg ? auteurInitials : '……'} ]`,
+                    text: `\tParaphes : [ Bénéficiaire : ${benefInitials} ]  [ Auteur : ${auteurInitials} ]`,
                     size: 15,
-                    color: cessionnaireSigImg || auteurSigImg ? '1e3a8a' : '64748b',
-                    bold: Boolean(cessionnaireSigImg || auteurSigImg),
+                    color: '1e3a8a',
+                    bold: true,
                   }),
                   new TextRun({ text: '\tPage ', size: 15, color: '555555' }),
                   new TextRun({ children: [PageNumber.CURRENT], size: 15, color: '555555' }),
