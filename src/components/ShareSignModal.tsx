@@ -23,25 +23,10 @@ export function ShareSignModal({
   const [loading, setLoading] = useState(false)
   const [checking, setChecking] = useState(false)
   const [copiedLink, setCopiedLink] = useState(false)
-  const [copiedEmail, setCopiedEmail] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [checkStatusMessage, setCheckStatusMessage] = useState<string | null>(null)
 
   const shareUrl = token ? `${window.location.origin}/signer?token=${token}` : ''
-  const auteurNom = data.auteurNom ? data.auteurNom.trim() : 'Cher photographe'
-
-  const emailSubject = `Signature de votre contrat de cession de droits d'auteur — Évasion Littorale (Réf. ${contractNumero})`
-  const emailBody = `Bonjour ${auteurNom},
-
-Dans le cadre de notre collaboration avec Évasion Littorale, voici le lien sécurisé pour consulter et apposer votre signature sur le contrat de cession de droits d'auteur photographiques (Réf. ${contractNumero}) :
-
-👉 ${shareUrl}
-
-La signature s'effectue en quelques secondes au doigt ou à la souris sur votre smartphone ou votre ordinateur. Vous pourrez y télécharger directement votre exemplaire PDF officiel signé par les deux parties.
-
-Bien cordialement,
-Laurent Jonas — Évasion Littorale
-contact@evasion-littorale.fr`
 
   const handleCreateLink = async () => {
     try {
@@ -62,17 +47,6 @@ contact@evasion-littorale.fr`
     await navigator.clipboard.writeText(shareUrl)
     setCopiedLink(true)
     setTimeout(() => setCopiedLink(false), 2500)
-  }
-
-  const handleCopyEmail = async () => {
-    await navigator.clipboard.writeText(emailBody)
-    setCopiedEmail(true)
-    setTimeout(() => setCopiedEmail(false), 2500)
-  }
-
-  const handleOpenMailApp = () => {
-    const mailto = `mailto:?subject=${encodeURIComponent(emailSubject)}&body=${encodeURIComponent(emailBody)}`
-    window.location.href = mailto
   }
 
   const handleCheckStatus = async () => {
@@ -125,11 +99,10 @@ contact@evasion-littorale.fr`
         {!token ? (
           <div className="share-initial-state">
             <div className="share-ready-card">
-              <span className="material-symbols-rounded share-large-icon">forward_to_inbox</span>
-              <h4>Prêt à envoyer à {data.auteurNom || 'l’Auteur'} ?</h4>
+              <span className="material-symbols-rounded share-large-icon">link</span>
+              <h4>Générer un lien de signature pour {data.auteurNom || 'l’Auteur'}</h4>
               <p>
-                Le contrat sera enregistré dans votre espace sécurisé en ligne pendant 14 jours.
-                Vous obtiendrez un lien direct et un modèle d'e-mail pré-rempli.
+                Le contrat sera accessible via un lien unique et sécurisé valable pendant 14 jours.
               </p>
               <button
                 type="button"
@@ -167,44 +140,11 @@ contact@evasion-littorale.fr`
                 </button>
               </div>
               <span className="share-box-hint">
-                🔒 Jeton cryptographique unique à usage unique • Expire automatiquement après 14 jours.
+                🔒 Jeton cryptographique unique • Expire automatiquement après 14 jours.
               </span>
             </div>
 
-            {/* BLOC 2 : MODÈLE D'EMAIL PRÊT À L'EMPLOI */}
-            <div className="share-box-section">
-              <div className="share-email-header">
-                <label className="share-box-lbl">Message type prêt pour e-mail ou WhatsApp :</label>
-                <button
-                  type="button"
-                  className="btn btn-small btn-ghost"
-                  onClick={handleCopyEmail}
-                >
-                  <span className="material-symbols-rounded icon-xs">
-                    {copiedEmail ? 'check' : 'content_copy'}
-                  </span>
-                  <span>{copiedEmail ? 'Message copié !' : 'Copier le texte'}</span>
-                </button>
-              </div>
-              <textarea
-                readOnly
-                className="share-email-textarea"
-                rows={5}
-                value={emailBody}
-              />
-              <div className="share-email-actions">
-                <button
-                  type="button"
-                  className="btn btn-secondary btn-small"
-                  onClick={handleOpenMailApp}
-                >
-                  <span className="material-symbols-rounded icon-sm">mail</span>
-                  <span>Ouvrir dans mon application Mail</span>
-                </button>
-              </div>
-            </div>
-
-            {/* BLOC 3 : STATUT EN DIRECT */}
+            {/* BLOC 2 : STATUT EN DIRECT */}
             <div className="share-status-bar">
               <div className="share-status-info">
                 <span className="status-dot orange" />

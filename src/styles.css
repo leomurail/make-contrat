@@ -2305,22 +2305,28 @@ body {
 }
 
 .public-sign-main {
-  max-width: 1220px;
+  max-width: 1380px;
   width: 100%;
   margin: 0 auto;
-  padding: 24px 20px 60px;
+  padding: 24px 24px 60px;
   flex: 1;
 }
 
 .public-sign-container {
   display: grid;
-  grid-template-columns: minmax(0, 1.25fr) minmax(340px, 0.95fr);
+  grid-template-columns: minmax(0, 1.35fr) minmax(380px, 0.9fr);
   gap: 28px;
   align-items: start;
 }
 
+.public-sign-container.is-signed {
+  grid-template-columns: minmax(0, 920px);
+  justify-content: center;
+}
+
 @media (max-width: 860px) {
-  .public-sign-container {
+  .public-sign-container,
+  .public-sign-container.is-signed {
     grid-template-columns: 1fr;
     gap: 20px;
   }
@@ -2328,6 +2334,9 @@ body {
     flex-direction: column;
     align-items: flex-start;
     gap: 8px;
+  }
+  .mobile-tab-hidden {
+    display: none !important;
   }
 }
 
@@ -2690,7 +2699,8 @@ body {
   background: #525659;
   border-radius: var(--radius-md);
   overflow: hidden;
-  height: 720px;
+  height: calc(100vh - 170px);
+  min-height: 780px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
   display: flex;
   flex-direction: column;
@@ -2700,6 +2710,7 @@ body {
 @media (max-width: 860px) {
   .public-preview-frame-wrap {
     height: 560px;
+    min-height: 480px;
   }
 }
 

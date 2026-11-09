@@ -223,8 +223,8 @@ export function DualSignaturePanel({
                     className="btn btn-small btn-primary"
                     onClick={() => setShowShareModal(true)}
                   >
-                    <span className="material-symbols-rounded icon-sm">forward_to_inbox</span>
-                    <span>{shareToken ? 'Gérer le lien envoyé' : 'Envoyer le lien par e-mail'}</span>
+                    <span className="material-symbols-rounded icon-sm">link</span>
+                    <span>{shareToken ? 'Gérer le lien de signature' : 'Générer un lien de signature'}</span>
                   </button>
                   <button
                     type="button"

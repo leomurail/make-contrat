@@ -24,9 +24,11 @@ export function PublicSignPage({ token }: Props) {
   const [agreed, setAgreed] = useState(false)
   const [mobileTab, setMobileTab] = useState<'preview' | 'sign'>('preview')
   const [isFullscreenPreview, setIsFullscreenPreview] = useState(false)
+  const [fitWidth, setFitWidth] = useState(false)
 
   // Canvas tactile de signature
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
+  const signCardRef = useRef<HTMLDivElement | null>(null)
   const isDownRef = useRef(false)
   const [hasDrawn, setHasDrawn] = useState(false)
 
@@ -81,6 +83,25 @@ export function PublicSignPage({ token }: Props) {
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [])
 
+  // Bloquer le défilement de la page principale quand le plein écran est actif
+  useEffect(() => {
+    if (isFullscreenPreview) {
+      const originalOverflow = document.body.style.overflow
+      document.body.style.overflow = 'hidden'
+      return () => {
+        document.body.style.overflow = originalOverflow
+      }
+    }
+  }, [isFullscreenPreview])
+
+  const focusSignaturePanel = () => {
+    setIsFullscreenPreview(false)
+    setMobileTab('sign')
+    setTimeout(() => {
+      signCardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }, 80)
+  }
+
   const getPos = (e: PointerEvent<HTMLCanvasElement>) => {
     const rect = e.currentTarget.getBoundingClientRect()
     return {
@@ -92,6 +113,10 @@ export function PublicSignPage({ token }: Props) {
   const startStroke = (e: PointerEvent<HTMLCanvasElement>) => {
     const ctx = canvasRef.current?.getContext('2d')
     if (!ctx) return
+    ctx.strokeStyle = '#0f172a'
+    ctx.lineWidth = 2.5
+    ctx.lineCap = 'round'
+    ctx.lineJoin = 'round'
     isDownRef.current = true
     setHasDrawn(true)
     e.currentTarget.setPointerCapture(e.pointerId)
@@ -258,11 +283,10 @@ export function PublicSignPage({ token }: Props) {
         ) : null}
 
         {/* CONTENEUR PRINCIPAL EN SPLIT-SCREEN SUR DESKTOP */}
-        <div className="public-sign-container">
+        <div className={`public-sign-container ${success ? 'is-signed' : ''}`}>
           {/* COLONNE GAUCHE : PRÉVISUALISATION DIRECTE ET INTERACTIVE DU CONTRAT */}
           <div
-            className="public-preview-col"
-            style={{ display: !success && mobileTab === 'sign' ? 'none' : 'flex' }}
+            className={`public-preview-col ${!success && mobileTab === 'sign' ? 'mobile-tab-hidden' : ''}`}
           >
             <div className="public-preview-header-bar">
               <div className="public-preview-title">
@@ -327,8 +351,8 @@ export function PublicSignPage({ token }: Props) {
           {/* COLONNE DROITE : PANNEAU TACTILE DE SIGNATURE INTERACTIF */}
           {!success ? (
             <div
-              className="public-sign-action-col"
-              style={{ display: mobileTab === 'preview' ? 'none' : 'block' }}
+              ref={signCardRef}
+              className={`public-sign-action-col ${mobileTab === 'preview' ? 'mobile-tab-hidden' : ''}`}
             >
               <div className="public-sign-card signature-pad-card">
                 <h2 className="pad-card-title">Votre signature électronique</h2>
@@ -436,37 +460,64 @@ export function PublicSignPage({ token }: Props) {
             <div className="preview-fullscreen-actions">
               <button
                 type="button"
-                className="btn btn-small btn-primary"
+                className="btn btn-ghost btn-invert"
+                onClick={() => setFitWidth(!fitWidth)}
+                title={fitWidth ? 'Revenir au format A4 centré' : "Ajuster à 100% de la largeur de l'écran"}
+              >
+                <span className="material-symbols-rounded icon-sm">
+                  {fitWidth ? 'fit_screen' : 'width_full'}
+                </span>
+                <span>{fitWidth ? 'Format A4' : 'Pleine largeur'}</span>
+              </button>
+
+              <button
+                type="button"
+                className="btn btn-ghost btn-invert"
                 onClick={handleDownloadPdf}
                 disabled={downloading}
               >
-                <span className="material-symbols-rounded icon-xs">download</span>
+                <span className="material-symbols-rounded icon-sm">download</span>
                 <span>{downloading ? 'Génération…' : 'Télécharger le PDF'}</span>
               </button>
+
+              {!success ? (
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={focusSignaturePanel}
+                >
+                  <span className="material-symbols-rounded icon-sm">draw</span>
+                  <span>Signer ce contrat ✍️</span>
+                </button>
+              ) : null}
+
               <button
                 type="button"
-                className="btn-icon-close"
+                className="btn-modal-close-icon"
                 onClick={() => setIsFullscreenPreview(false)}
-                aria-label="Fermer le plein écran"
+                title="Quitter le plein écran (Échap)"
               >
-                <span className="material-symbols-rounded">close</span>
+                <span className="material-symbols-rounded icon-sm">close</span>
+                <span>Fermer</span>
               </button>
             </div>
           </div>
 
-          <div className="preview-fullscreen-content">
-            <ErrorBoundary
-              fallback={(err, retry) => (
-                <div className="preview-state error">
-                  <p>Erreur d'affichage : {err.message}</p>
-                  <button type="button" className="btn btn-ghost" onClick={retry}>
-                    Réessayer
-                  </button>
-                </div>
-              )}
-            >
-              <PdfPreview document={previewDocument} delay={100} />
-            </ErrorBoundary>
+          <div className="preview-fullscreen-body-wrapper">
+            <div className={`preview-fullscreen-doc-container ${fitWidth ? 'full-width' : 'a4-width'}`}>
+              <ErrorBoundary
+                fallback={(err, retry) => (
+                  <div className="preview-state error">
+                    <p>Erreur d'affichage : {err.message}</p>
+                    <button type="button" className="btn btn-ghost" onClick={retry}>
+                      Réessayer
+                    </button>
+                  </div>
+                )}
+              >
+                <PdfPreview document={previewDocument} delay={100} />
+              </ErrorBoundary>
+            </div>
           </div>
         </div>
       ) : null}
