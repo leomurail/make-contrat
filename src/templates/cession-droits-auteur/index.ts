@@ -41,7 +41,7 @@ export const contratCession: DocTemplate<ContratCessionData> = {
   generateDocx: generateContratCessionDocx,
   numbering: { field: 'numero', dateField: 'dateSignature' },
   labelField: 'auteurNom',
-  detail: (d) => d.cessionnaireDenomination || d.cessionnaireRepresentant || 'Stéphanie JONAS EI',
+  detail: (d) => d.cessionnaireDenomination || d.cessionnaireRepresentant || 'Stéphanie JONAS LMNP',
   defaults: () => ({
     numero: '',
     dateSignature: todayIso(),
@@ -55,9 +55,9 @@ export const contratCession: DocTemplate<ContratCessionData> = {
     auteurSignature: '',
     auteurLuApprouve: '',
 
-    // Bénéficiaire : pré-rempli avec les données SIRENE (Stéphanie JONAS EI - 103 726 881 00016)
+    // Bénéficiaire : pré-rempli avec les données SIRENE (Stéphanie JONAS LMNP - 103 726 881 00016)
     cessionnaireDenomination: 'Évasion Littorale',
-    cessionnaireRepresentant: 'Stéphanie JONAS EI',
+    cessionnaireRepresentant: 'Stéphanie JONAS LMNP',
     cessionnaireAdresse: '136 Route de la Caillauderie, 85160 Saint-Jean-de-Monts', // Renseignez ici votre adresse par défaut (ou via Mode Expert > Bénéficiaire)
     cessionnaireRcs: '103 726 881 00016',
     cessionnaireEmail: 'evasionlittorale@gmail.com',
@@ -139,7 +139,7 @@ export const contratCession: DocTemplate<ContratCessionData> = {
           key: 'cessionnaireRepresentant',
           label: 'Titulaire légal',
           type: 'text',
-          placeholder: 'Stéphanie JONAS EI',
+          placeholder: 'Stéphanie JONAS LMNP',
         },
         {
           key: 'cessionnaireAdresse',

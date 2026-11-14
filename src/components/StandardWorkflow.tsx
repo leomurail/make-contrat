@@ -33,7 +33,7 @@ export function StandardWorkflow({
 }: Props) {
   // Mode Standard : étapes 0 (Photographe), 1 (Photos), 2 (Signatures), 3 (Aperçu & Rendu)
   const [standardStep, setStandardStep] = useState<0 | 1 | 2 | 3>(0)
-  
+
   // Mode Expert : étapes 0 (Photographe), 1 (Bénéficiaire), 2 (Conditions & Durée), 3 (Photos), 4 (Signatures), 5 (Aperçu & Rendu)
   const [expertStep, setExpertStep] = useState<number>(0)
   const [expertMode, setExpertMode] = useState(false)
@@ -300,7 +300,7 @@ export function StandardWorkflow({
                 </span>
                 <div className="wizard-helper-text">
                   <strong>Pré-remplissage conforme Évasion Littorale</strong>
-                  <span>SIRET 103 726 881 00016 &amp; titulaire Stéphanie JONAS EI pré-configurés.</span>
+                  <span>SIRET 103 726 881 00016 &amp; titulaire Stéphanie JONAS LMNP pré-configurés.</span>
                 </div>
               </div>
 

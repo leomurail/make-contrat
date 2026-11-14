@@ -99,7 +99,7 @@ export function DualSignaturePanel({
               <h3 className="sig-party-name">
                 {[data.cessionnaireDenomination?.trim(), data.cessionnaireRepresentant?.trim()]
                   .filter(Boolean)
-                  .join(' — ') || 'Stéphanie JONAS EI'}
+                  .join(' — ') || 'Stéphanie JONAS LMNP'}
               </h3>
             </div>
             {hasBeneficiaire ? (
