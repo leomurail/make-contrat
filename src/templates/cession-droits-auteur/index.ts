@@ -41,7 +41,7 @@ export const contratCession: DocTemplate<ContratCessionData> = {
   generateDocx: generateContratCessionDocx,
   numbering: { field: 'numero', dateField: 'dateSignature' },
   labelField: 'auteurNom',
-  detail: (d) => d.cessionnaireDenomination || 'Évasion Littorale',
+  detail: (d) => d.cessionnaireDenomination || d.cessionnaireRepresentant || 'Stéphanie JONAS EI',
   defaults: () => ({
     numero: '',
     dateSignature: todayIso(),
@@ -55,11 +55,11 @@ export const contratCession: DocTemplate<ContratCessionData> = {
     auteurSignature: '',
     auteurLuApprouve: '',
 
-    // Bénéficiaire : pré-rempli avec les données SIRENE (Laurent JONAS EI - 444 869 051 00045)
+    // Bénéficiaire : pré-rempli avec les données SIRENE (Stéphanie JONAS EI - 103 726 881 00016)
     cessionnaireDenomination: 'Évasion Littorale',
-    cessionnaireRepresentant: 'Laurent JONAS EI',
-    cessionnaireAdresse: 'Bâtiment B, 19 boulevard Victor Hugo, 44200 Nantes',
-    cessionnaireRcs: '444 869 051 00045',
+    cessionnaireRepresentant: 'Stéphanie JONAS EI',
+    cessionnaireAdresse: '136 Route de la Caillauderie, 85160 Saint-Jean-de-Monts', // Renseignez ici votre adresse par défaut (ou via Mode Expert > Bénéficiaire)
+    cessionnaireRcs: '103 726 881 00016',
     cessionnaireEmail: 'evasionlittorale@gmail.com',
     cessionnaireSignature: '',
     cessionnaireLuApprouve: '',
@@ -127,31 +127,31 @@ export const contratCession: DocTemplate<ContratCessionData> = {
     {
       title: 'Le Bénéficiaire (Votre structure)',
       shortTitle: 'Bénéficiaire',
-      description: 'Coordonnées juridiques et SIRET de l’établissement exploitant',
+      description: 'Identité juridique, SIRET et adresse du bénéficiaire des droits',
       fields: [
         {
           key: 'cessionnaireDenomination',
-          label: 'Nom commercial / Enseigne',
+          label: 'Nom commercial / Enseigne (optionnel)',
           type: 'text',
-          placeholder: 'Évasion Littorale',
+          placeholder: 'Évasion Littorale (laisser vide si sans enseigne)',
         },
         {
           key: 'cessionnaireRepresentant',
           label: 'Titulaire légal',
           type: 'text',
-          placeholder: 'Laurent JONAS EI',
+          placeholder: 'Stéphanie JONAS EI',
         },
         {
           key: 'cessionnaireAdresse',
           label: 'Adresse de l’établissement',
           type: 'text',
-          placeholder: 'Bâtiment B, 19 boulevard Victor Hugo, 44200 Nantes',
+          placeholder: 'Ex : 12 rue des Dunes, 85160 Saint-Jean-de-Monts',
         },
         {
           key: 'cessionnaireRcs',
           label: 'Numéro SIRET',
           type: 'text',
-          placeholder: '444 869 051 00045',
+          placeholder: '103 726 881 00016',
         },
         {
           key: 'cessionnaireEmail',

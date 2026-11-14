@@ -20,6 +20,7 @@ import {
   WidthType,
 } from 'docx'
 import { formatAllSocialAccounts, formatDate, parsePhotoItems, yearsToWords } from '../../lib/format'
+import { cleanSiret, extractInitials, formatBeneficiaryName, parseSupportFlags } from './helpers'
 import type { ContratCessionData } from './types'
 
 // A4 dimensions in DXA (210mm x 297mm) with ~22mm margins (1247 DXA)
@@ -31,20 +32,6 @@ const HALF_WIDTH = Math.floor(CONTENT_WIDTH / 2) // 4706 DXA
 
 const noBorder = { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' }
 const noBorders = { top: noBorder, bottom: noBorder, left: noBorder, right: noBorder }
-
-function parseSupportFlags(supports: string | undefined) {
-  const norm = (supports || '').toLowerCase()
-  if (!norm) return { useSite: true, useSocial: true }
-  return {
-    useSite: norm.includes('site'),
-    useSocial: norm.includes('réseaux') || norm.includes('reseaux'),
-  }
-}
-
-function cleanSiret(value: string | undefined): string {
-  if (!value) return ''
-  return value.replace(/^siret\s*:?\s*/i, '').trim()
-}
 
 function dataUrlToImage(dataUrl: string | undefined): { bytes: Uint8Array; type: 'png' | 'jpg' } | null {
   if (!dataUrl) return null
@@ -90,21 +77,6 @@ function bulletPara(boldPrefix: string, text: string): Paragraph {
   })
 }
 
-function extractInitials(name?: string, fallback = '…'): string {
-  if (!name || !name.trim()) return fallback
-  const cleaned = name
-    .replace(/\b(EI|EIRL|SARL|SAS|SASU|EURL|SA|SCI)\b/gi, '')
-    .replace(/[^a-zA-ZÀ-ÿ\s-]/g, '')
-    .trim()
-  const words = cleaned.split(/[\s-]+/).filter(Boolean)
-  if (words.length === 0) return fallback
-  if (words.length === 1) {
-    const w = words[0]
-    return w.length >= 2 ? w.slice(0, 2).toUpperCase() : `${w[0].toUpperCase()}.`
-  }
-  return words.slice(0, 3).map((w) => w[0].toUpperCase()).join('')
-}
-
 export async function generateContratCessionDocx(data: ContratCessionData): Promise<Blob> {
   const cleanInstagram = (data.auteurInstagram || '').replace(/^@+/, '').trim()
   const { useSite, useSocial } = parseSupportFlags(data.supportsAutorises)
@@ -126,7 +98,7 @@ export async function generateContratCessionDocx(data: ContratCessionData): Prom
 
   const benefInitials = extractInitials(
     data.cessionnaireRepresentant || data.cessionnaireDenomination,
-    'LJ',
+    'SJ',
   )
   const auteurInitials = extractInitials(data.auteurNom, 'Auteur')
 
@@ -229,7 +201,7 @@ export async function generateContratCessionDocx(data: ContratCessionData): Prom
                 spacing: { after: 40 },
                 children: [
                   new TextRun({
-                    text: `Nom : ${data.cessionnaireDenomination?.trim() || 'Évasion Littorale'}${data.cessionnaireRepresentant?.trim() ? ` — ${data.cessionnaireRepresentant.trim()}` : ''}`,
+                    text: `Nom : ${formatBeneficiaryName(data.cessionnaireDenomination, data.cessionnaireRepresentant)}`,
                     size: 19,
                   }),
                 ],
@@ -478,14 +450,18 @@ export async function generateContratCessionDocx(data: ContratCessionData): Prom
             spacing: { after: 40 },
             children: [new TextRun({ text: '2° Le Bénéficiaire (Le Cessionnaire) :', bold: true, size: 20 })],
           }),
-          new Paragraph({
-            indent: { left: 280 },
-            spacing: { after: 30 },
-            children: [
-              new TextRun({ text: 'Enseigne / Nom commercial : ', bold: true, size: 20 }),
-              new TextRun({ text: data.cessionnaireDenomination?.trim() || 'Évasion Littorale', size: 20 }),
-            ],
-          }),
+          ...(data.cessionnaireDenomination?.trim()
+            ? [
+                new Paragraph({
+                  indent: { left: 280 },
+                  spacing: { after: 30 },
+                  children: [
+                    new TextRun({ text: 'Enseigne / Nom commercial : ', bold: true, size: 20 }),
+                    new TextRun({ text: data.cessionnaireDenomination.trim(), size: 20 }),
+                  ],
+                }),
+              ]
+            : []),
           ...(data.cessionnaireRepresentant?.trim()
             ? [
                 new Paragraph({
@@ -510,18 +486,14 @@ export async function generateContratCessionDocx(data: ContratCessionData): Prom
                 }),
               ]
             : []),
-          ...(data.cessionnaireAdresse?.trim()
-            ? [
-                new Paragraph({
-                  indent: { left: 280 },
-                  spacing: { after: 30 },
-                  children: [
-                    new TextRun({ text: 'Adresse : ', bold: true, size: 20 }),
-                    new TextRun({ text: data.cessionnaireAdresse.trim(), size: 20 }),
-                  ],
-                }),
-              ]
-            : []),
+          new Paragraph({
+            indent: { left: 280 },
+            spacing: { after: 30 },
+            children: [
+              new TextRun({ text: 'Adresse : ', bold: true, size: 20 }),
+              new TextRun({ text: data.cessionnaireAdresse?.trim() || '………………………………………………………………', size: 20 }),
+            ],
+          }),
           ...(data.cessionnaireEmail?.trim()
             ? [
                 new Paragraph({

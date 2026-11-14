@@ -206,7 +206,7 @@ export function PublicSignPage({ token }: Props) {
           <h2>Lien invalide ou expiré</h2>
           <p className="error-msg">{error || 'Ce lien de signature n’est plus disponible.'}</p>
           <div className="error-hint">
-            Si vous pensez qu’il s’agit d’une erreur, merci de contacter directement Laurent Jonas (Évasion Littorale) pour recevoir un nouveau lien.
+            Si vous pensez qu’il s’agit d’une erreur, merci de contacter directement Stéphanie Jonas (Évasion Littorale) pour recevoir un nouveau lien.
           </div>
         </div>
       </div>

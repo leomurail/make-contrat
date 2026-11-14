@@ -96,7 +96,11 @@ export function DualSignaturePanel({
           <div className="sig-card-header">
             <div>
               <span className="sig-party-role">Partie 1</span>
-              <h3 className="sig-party-name">Évasion Littorale (Laurent Jonas)</h3>
+              <h3 className="sig-party-name">
+                {[data.cessionnaireDenomination?.trim(), data.cessionnaireRepresentant?.trim()]
+                  .filter(Boolean)
+                  .join(' — ') || 'Stéphanie JONAS EI'}
+              </h3>
             </div>
             {hasBeneficiaire ? (
               <span className="sig-check-pill">
@@ -277,7 +281,7 @@ export function DualSignaturePanel({
         <SignatureModal
           signerTitle={
             activeSigner === 'beneficiaire'
-              ? 'Signature Évasion Littorale'
+              ? `Signature ${data.cessionnaireDenomination?.trim() || data.cessionnaireRepresentant?.trim() || 'du Bénéficiaire'}`
               : `Signature de ${data.auteurNom || 'l’Auteur'}`
           }
           isBeneficiaire={activeSigner === 'beneficiaire'}

@@ -1,6 +1,7 @@
 import { Document, Image, Page, StyleSheet, Text, View } from '@react-pdf/renderer'
 import './../../lib/fonts'
 import { formatAllSocialAccounts, formatDate, parsePhotoItems, yearsToWords } from '../../lib/format'
+import { cleanSiret, extractInitials, formatBeneficiaryName, parseSupportFlags } from './helpers'
 import type { ContratCessionData } from './types'
 
 const s = StyleSheet.create({
@@ -261,20 +262,6 @@ interface Props {
   data: ContratCessionData
 }
 
-function parseSupportFlags(supports: string | undefined) {
-  const norm = (supports || '').toLowerCase()
-  if (!norm) return { useSite: true, useSocial: true }
-  return {
-    useSite: norm.includes('site'),
-    useSocial: norm.includes('réseaux') || norm.includes('reseaux'),
-  }
-}
-
-function cleanSiret(value: string | undefined): string {
-  if (!value) return ''
-  return value.replace(/^siret\s*:?\s*/i, '').trim()
-}
-
 function PartyLine({ label, value }: { label: string; value?: string }) {
   if (!value || !value.trim() || value.trim().toLowerCase() === 'sans objet') return null
   return (
@@ -283,21 +270,6 @@ function PartyLine({ label, value }: { label: string; value?: string }) {
       {value.trim()}
     </Text>
   )
-}
-
-function extractInitials(name?: string, fallback = '…'): string {
-  if (!name || !name.trim()) return fallback
-  const cleaned = name
-    .replace(/\b(EI|EIRL|SARL|SAS|SASU|EURL|SA|SCI)\b/gi, '')
-    .replace(/[^a-zA-ZÀ-ÿ\s-]/g, '')
-    .trim()
-  const words = cleaned.split(/[\s-]+/).filter(Boolean)
-  if (words.length === 0) return fallback
-  if (words.length === 1) {
-    const w = words[0]
-    return w.length >= 2 ? w.slice(0, 2).toUpperCase() : `${w[0].toUpperCase()}.`
-  }
-  return words.slice(0, 3).map((w) => w[0].toUpperCase()).join('')
 }
 
 function RunningFooter({
@@ -368,7 +340,7 @@ export function ContratCession({ data }: Props) {
 
   const benefInitials = extractInitials(
     data.cessionnaireRepresentant || data.cessionnaireDenomination,
-    'LJ',
+    'SJ',
   )
   const auteurInitials = extractInitials(data.auteurNom, 'Auteur')
 
@@ -430,10 +402,10 @@ export function ContratCession({ data }: Props) {
 
         <View style={s.partyBlock}>
           <Text style={s.partyBlockTitle}>2° Le Bénéficiaire (Le Cessionnaire) :</Text>
-          <PartyLine label="Enseigne / Nom commercial" value={data.cessionnaireDenomination || 'Évasion Littorale'} />
+          <PartyLine label="Enseigne / Nom commercial" value={data.cessionnaireDenomination} />
           <PartyLine label="Titulaire légal" value={data.cessionnaireRepresentant} />
           <PartyLine label="Numéro SIRET" value={siretCessionnaire} />
-          <PartyLine label="Adresse" value={data.cessionnaireAdresse} />
+          <PartyLine label="Adresse" value={data.cessionnaireAdresse?.trim() || '………………………………………………………………'} />
           <PartyLine label="Adresse e-mail" value={data.cessionnaireEmail} />
           <Text style={s.partyClosing}>Ci-après dénommé « Le Bénéficiaire », d’autre part.</Text>
         </View>
@@ -636,7 +608,7 @@ export function ContratCession({ data }: Props) {
             <View style={s.signatureCol}>
               <Text style={s.signatureColTitle}>Pour le Bénéficiaire</Text>
               <Text style={s.signatureMeta}>
-                {`Nom : ${data.cessionnaireDenomination?.trim() || 'Évasion Littorale'}${data.cessionnaireRepresentant?.trim() ? ` — ${data.cessionnaireRepresentant.trim()}` : ''}`}
+                {`Nom : ${formatBeneficiaryName(data.cessionnaireDenomination, data.cessionnaireRepresentant)}`}
               </Text>
               <Text style={s.signatureLabel}>Mention « Lu et approuvé, bon pour accord » :</Text>
               <Text style={s.signatureHandwrittenMention}>Lu et approuvé, bon pour accord</Text>

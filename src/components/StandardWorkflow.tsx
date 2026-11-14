@@ -300,7 +300,7 @@ export function StandardWorkflow({
                 </span>
                 <div className="wizard-helper-text">
                   <strong>Pré-remplissage conforme Évasion Littorale</strong>
-                  <span>SIRET 444 869 051 00045 & gérance Laurent Jonas EI pré-configurés.</span>
+                  <span>SIRET 103 726 881 00016 &amp; titulaire Stéphanie JONAS EI pré-configurés.</span>
                 </div>
               </div>
 
