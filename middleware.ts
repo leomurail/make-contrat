@@ -24,7 +24,6 @@ export default function middleware(request: Request) {
   const isPublicRoute =
     path.startsWith('/signer') ||
     path.startsWith('/api/contracts/sign') ||
-    path.startsWith('/api/contracts/status') ||
     path.startsWith('/assets/') ||
     path.startsWith('/fonts/') ||
     path === '/favicon.ico' ||
@@ -34,12 +33,17 @@ export default function middleware(request: Request) {
     return next()
   }
 
-  // 2. Vérification du Basic Auth pour l'espace d'administration et de configuration
+  // 2. Vérification du Basic Auth pour l'espace d'administration et les API d'administration
+  // Comportement fail-closed : si SITE_PASSWORD n'est pas configuré, on refuse l'accès.
   const password = process.env.SITE_PASSWORD
   if (!password) {
-    // Si aucun mot de passe n'est encore configuré dans Vercel, on autorise l'accès
-    // pour éviter de bloquer l'application en cours de configuration.
-    return next()
+    return new Response('Configuration requise : SITE_PASSWORD non défini sur le serveur.', {
+      status: 503,
+      headers: {
+        'Content-Type': 'text/plain; charset=UTF-8',
+        'Cache-Control': 'no-store',
+      },
+    })
   }
 
   const [user, pass] = decodeBasicAuth(request.headers.get('authorization'))
@@ -53,6 +57,8 @@ export default function middleware(request: Request) {
   return new Response('Accès protégé — Make Contrat.', {
     status: 401,
     headers: {
+      'Content-Type': 'text/plain; charset=UTF-8',
+      'Cache-Control': 'no-store',
       'WWW-Authenticate': 'Basic realm="Make Contrat - Administration", charset="UTF-8"',
     },
   })

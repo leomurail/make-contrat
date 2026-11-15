@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react'
 import { ContractsDashboard } from './components/ContractsDashboard'
 import { StandardWorkflow } from './components/StandardWorkflow'
 import { PublicSignPage } from './components/PublicSignPage'
+import { LegalFooter, LegalNoticeModal } from './components/LegalNotice'
 import {
   createNewContract,
   deleteContract,
@@ -46,6 +47,7 @@ export default function App() {
   const template = templates[0] // Modèle de cession de droits d'auteur
   const [activeContractId, setActiveContractId] = useState<number | null>(null)
   const [notice, setNotice] = useState<{ text: string; error?: boolean } | null>(null)
+  const [showLegalModal, setShowLegalModal] = useState(false)
 
   // Requête réactive sur la liste des contrats triés par date décroissante
   const contracts = useLiveQuery(
@@ -319,6 +321,9 @@ export default function App() {
           />
         )}
       </main>
+
+      <LegalFooter onOpen={() => setShowLegalModal(true)} />
+      <LegalNoticeModal open={showLegalModal} onClose={() => setShowLegalModal(false)} />
     </div>
   )
 }

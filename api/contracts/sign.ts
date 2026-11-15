@@ -1,142 +1,134 @@
-import { getRedisClient, CONTRACT_TTL_SECONDS } from '../_lib/redis'
-import type { RemoteContractRecord } from '../_lib/types'
+import { getRedisClient } from '../_lib/redis'
+import {
+  isValidSignatureDataUrl,
+  isValidUuid,
+  jsonResponse,
+  readJsonBody,
+  sanitizeContractRecord,
+  SIGNED_CONTRACT_TTL_SECONDS,
+  verifySameOriginMutation,
+} from '../_lib/security'
 
 export const config = {
   runtime: 'edge',
 }
 
-const COMMON_HEADERS = {
-  'Content-Type': 'application/json',
-  'Cache-Control': 'no-store, private',
-}
+const MAX_SIGN_BODY_BYTES = 2 * 1024 * 1024 // 2 Mo max pour une signature
 
 export default async function handler(request: Request) {
   const url = new URL(request.url)
   const redis = getRedisClient()
 
   if (!redis) {
-    return new Response(
-      JSON.stringify({
-        error: 'Base de données non disponible. Veuillez vérifier la connexion Upstash Redis.',
-      }),
-      { status: 500, headers: COMMON_HEADERS },
+    return jsonResponse(
+      { error: 'Base de données non disponible. Veuillez vérifier la connexion Upstash Redis.' },
+      500,
     )
   }
 
   // --- GET : Consulter le contrat à signer ---
   if (request.method === 'GET') {
     const token = url.searchParams.get('token')
-    if (!token) {
-      return new Response(JSON.stringify({ error: 'Jeton de signature manquant.' }), {
-        status: 400,
-        headers: COMMON_HEADERS,
-      })
+    if (!isValidUuid(token)) {
+      return jsonResponse({ error: 'Jeton de signature manquant ou invalide.' }, 400)
     }
 
     try {
       const raw = await redis.get<string>(`contract:${token}`)
       if (!raw) {
-        return new Response(
-          JSON.stringify({
-            error:
-              'Ce lien de signature est invalide, a expiré ou le contrat a été supprimé.',
-          }),
-          { status: 404, headers: COMMON_HEADERS },
+        return jsonResponse(
+          { error: 'Ce lien de signature est invalide, a expiré ou le contrat a été supprimé.' },
+          404,
         )
       }
 
-      const record: RemoteContractRecord = typeof raw === 'string' ? JSON.parse(raw) : raw
-      return new Response(JSON.stringify({ success: true, contract: record }), {
-        status: 200,
-        headers: COMMON_HEADERS,
-      })
+      const record = sanitizeContractRecord(raw)
+      return jsonResponse({ success: true, contract: record }, 200)
     } catch (error) {
       console.error('[API /api/contracts/sign GET]', error)
-      return new Response(
-        JSON.stringify({ error: 'Erreur lors de la lecture du contrat.' }),
-        { status: 500, headers: COMMON_HEADERS },
-      )
+      return jsonResponse({ error: 'Erreur lors de la lecture du contrat.' }, 500)
     }
   }
 
   // --- POST : Apposer la signature du photographe ---
   if (request.method === 'POST') {
-    // Protection anti-CSRF
-    const secFetchSite = request.headers.get('sec-fetch-site')
-    if (secFetchSite && secFetchSite === 'cross-site') {
-      return new Response(JSON.stringify({ error: 'Requête non autorisée.' }), {
-        status: 403,
-        headers: COMMON_HEADERS,
-      })
+    const csrfError = verifySameOriginMutation(request, true)
+    if (csrfError) return csrfError
+
+    const bodyResult = await readJsonBody<{
+      token?: unknown
+      auteurSignature?: unknown
+      signerName?: unknown
+      auteurLuApprouve?: unknown
+    }>(request, MAX_SIGN_BODY_BYTES)
+
+    if (!bodyResult.ok) {
+      return bodyResult.response
     }
 
     try {
-      const body = await request.json()
-      const { token, auteurSignature, signerName, auteurLuApprouve } = body
+      const { token, auteurSignature, signerName, auteurLuApprouve } = bodyResult.data
 
-      if (!token || !auteurSignature) {
-        return new Response(
-          JSON.stringify({ error: 'Jeton et signature obligatoires.' }),
-          { status: 400, headers: COMMON_HEADERS },
-        )
+      if (!isValidUuid(token)) {
+        return jsonResponse({ error: 'Jeton de signature manquant ou invalide.' }, 400)
+      }
+
+      if (auteurLuApprouve !== true) {
+        return jsonResponse({ error: 'L’acceptation de la mention « Lu et approuvé » est obligatoire.' }, 400)
+      }
+
+      if (!isValidSignatureDataUrl(auteurSignature)) {
+        return jsonResponse({ error: 'Format ou taille de signature invalide.' }, 400)
+      }
+
+      const trimmedName = typeof signerName === 'string' ? signerName.trim() : ''
+      if (trimmedName.length < 2 || trimmedName.length > 150) {
+        return jsonResponse({ error: 'Le prénom et nom du signataire sont obligatoires.' }, 400)
       }
 
       const raw = await redis.get<string>(`contract:${token}`)
       if (!raw) {
-        return new Response(
-          JSON.stringify({ error: 'Ce contrat n’existe plus ou a expiré.' }),
-          { status: 404, headers: COMMON_HEADERS },
-        )
+        return jsonResponse({ error: 'Ce contrat n’existe plus ou a expiré.' }, 404)
       }
 
-      const record: RemoteContractRecord = typeof raw === 'string' ? JSON.parse(raw) : raw
+      const record = sanitizeContractRecord(raw)
 
       if (record.status === 'signed') {
-        return new Response(
-          JSON.stringify({
+        return jsonResponse(
+          {
             error: 'Ce contrat a déjà été signé et validé.',
             contract: record,
-          }),
-          { status: 400, headers: COMMON_HEADERS },
+          },
+          400,
         )
       }
 
       const now = new Date()
       const todayString = now.toISOString().split('T')[0]
 
-      // Mise à jour des données du contrat avec la signature de l'auteur
+      // Mise à jour minimale sans collecte d'IP ni User-Agent (principe de minimisation RGPD)
       record.status = 'signed'
       record.data = {
         ...record.data,
         auteurSignature,
-        auteurLuApprouve: auteurLuApprouve !== false ? 'true' : 'true',
+        auteurLuApprouve: 'true',
         dateSignature: record.data.dateSignature || todayString,
-        auteurNom: signerName || record.data.auteurNom,
+        auteurNom: trimmedName,
       }
       record.photographeSignedAt = now.toISOString()
-      record.photographeIp = request.headers.get('x-forwarded-for') || 'inconnu'
-      record.photographeUserAgent = request.headers.get('user-agent') || 'inconnu'
+      record.expiresAt = new Date(now.getTime() + SIGNED_CONTRACT_TTL_SECONDS * 1000).toISOString()
 
-      // Sauvegarde dans Redis avec conservation du TTL
+      // Conservation réduite à 48h après signature pour laisser le temps de synchroniser et télécharger le PDF
       await redis.set(`contract:${token}`, JSON.stringify(record), {
-        ex: CONTRACT_TTL_SECONDS,
+        ex: SIGNED_CONTRACT_TTL_SECONDS,
       })
 
-      return new Response(JSON.stringify({ success: true, contract: record }), {
-        status: 200,
-        headers: COMMON_HEADERS,
-      })
+      return jsonResponse({ success: true, contract: record }, 200)
     } catch (error) {
       console.error('[API /api/contracts/sign POST]', error)
-      return new Response(
-        JSON.stringify({ error: 'Erreur lors de la signature.' }),
-        { status: 500, headers: COMMON_HEADERS },
-      )
+      return jsonResponse({ error: 'Erreur lors de la signature.' }, 500)
     }
   }
 
-  return new Response(JSON.stringify({ error: 'Méthode non autorisée.' }), {
-    status: 405,
-    headers: COMMON_HEADERS,
-  })
+  return jsonResponse({ error: 'Méthode non autorisée.' }, 405)
 }

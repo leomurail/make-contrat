@@ -7,7 +7,7 @@ Modèle initialement intégré : **Contrat de cession de droits d'auteur sur œu
 **Stack** : Vite + React 19 + TypeScript + [`@react-pdf/renderer`](https://react-pdf.org) + [Dexie](https://dexie.org) (IndexedDB).
 
 - **Aperçu réactif & Export vectoriel** : le même composant React génère la prévisualisation et l'export PDF imprimable ou signable, sans pixellisation.
-- **Zéro serveur & Confidentialité totale** : les contrats, identifiants des parties et données sensibles restent 100% dans le navigateur de l'ordinateur.
+- **Stockage local-first & signature à distance éphémère** : l'historique et les brouillons restent stockés dans le navigateur (IndexedDB via Dexie). Lorsqu'un contrat est envoyé pour signature à distance (`/signer?token=...`), une copie chiffrée en transit est stockée temporairement sur Upstash Redis via les fonctions Edge Vercel (expiration 14 jours, ramenée à 48 h après signature).
 - **Gestion des annexes & captures** : saisie des publications cédées et inclusion directe d'une capture d'écran horodatée du compte Instagram.
 
 ## Démarrer

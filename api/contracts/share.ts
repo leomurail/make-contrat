@@ -1,4 +1,11 @@
 import { getRedisClient, CONTRACT_TTL_SECONDS } from '../_lib/redis'
+import {
+  isValidUuid,
+  jsonResponse,
+  readJsonBody,
+  validateContractData,
+  verifySameOriginMutation,
+} from '../_lib/security'
 import type { RemoteContractRecord } from '../_lib/types'
 
 export const config = {
@@ -6,37 +13,24 @@ export const config = {
 }
 
 const MAX_BODY_BYTES = 5 * 1024 * 1024 // 5 Mo max
-const COMMON_HEADERS = {
-  'Content-Type': 'application/json',
-  'Cache-Control': 'no-store, private',
-}
 
 export default async function handler(request: Request) {
   const method = request.method
   if (method !== 'POST' && method !== 'DELETE') {
-    return new Response(JSON.stringify({ error: 'Méthode non autorisée. Utilisez POST ou DELETE.' }), {
-      status: 405,
-      headers: COMMON_HEADERS,
-    })
+    return jsonResponse({ error: 'Méthode non autorisée. Utilisez POST ou DELETE.' }, 405)
   }
 
-  // Protection anti-CSRF / Sec-Fetch-Site
-  const secFetchSite = request.headers.get('sec-fetch-site')
-  if (secFetchSite && secFetchSite === 'cross-site') {
-    return new Response(JSON.stringify({ error: 'Requête cross-origin non autorisée.' }), {
-      status: 403,
-      headers: COMMON_HEADERS,
-    })
-  }
+  const csrfError = verifySameOriginMutation(request, method === 'POST')
+  if (csrfError) return csrfError
 
   const redis = getRedisClient()
   if (!redis) {
-    return new Response(
-      JSON.stringify({
+    return jsonResponse(
+      {
         error:
           'Base de données non configurée. Veuillez connecter Upstash Redis dans le tableau de bord Vercel (Storage > Upstash).',
-      }),
-      { status: 500, headers: COMMON_HEADERS },
+      },
+      500,
     )
   }
 
@@ -44,72 +38,69 @@ export default async function handler(request: Request) {
 
   // --- TRAITEMENT DU DELETE (Suppression du lien de signature distant) ---
   if (method === 'DELETE') {
-    let token = url.searchParams.get('token')
+    let token: unknown = url.searchParams.get('token')
     if (!token && request.headers.get('content-type')?.includes('application/json')) {
-      try {
-        const body = await request.json()
-        token = body.token
-      } catch {
-        // Ignorer l'erreur de parsing body
+      const parsed = await readJsonBody<{ token?: unknown }>(request, 4096)
+      if (parsed.ok) {
+        token = parsed.data.token
       }
     }
 
-    if (!token) {
-      return new Response(JSON.stringify({ error: 'Jeton de signature manquant.' }), {
-        status: 400,
-        headers: COMMON_HEADERS,
-      })
+    if (!isValidUuid(token)) {
+      return jsonResponse({ error: 'Jeton de signature manquant ou invalide.' }, 400)
     }
 
     await redis.del(`contract:${token}`)
-    return new Response(
-      JSON.stringify({
+    return jsonResponse(
+      {
         success: true,
         message: 'Lien de signature supprimé avec succès.',
-      }),
-      { status: 200, headers: COMMON_HEADERS },
+      },
+      200,
     )
   }
 
   // --- TRAITEMENT DU POST ---
-  const contentLength = request.headers.get('content-length')
-  if (contentLength && parseInt(contentLength, 10) > MAX_BODY_BYTES) {
-    return new Response(JSON.stringify({ error: 'Contenu trop volumineux (limite 5 Mo).' }), {
-      status: 413,
-      headers: COMMON_HEADERS,
-    })
+  const bodyResult = await readJsonBody<{
+    action?: unknown
+    token?: unknown
+    contractNumero?: unknown
+    data?: unknown
+  }>(request, MAX_BODY_BYTES)
+
+  if (!bodyResult.ok) {
+    return bodyResult.response
   }
 
   try {
-    const body = await request.json()
+    const body = bodyResult.data
 
     // Fallback de suppression via POST pour les proxies filtrant DELETE
     if (body.action === 'delete') {
-      const token = body.token || url.searchParams.get('token')
-      if (!token) {
-        return new Response(JSON.stringify({ error: 'Jeton de signature manquant.' }), {
-          status: 400,
-          headers: COMMON_HEADERS,
-        })
+      const token = body.token ?? url.searchParams.get('token')
+      if (!isValidUuid(token)) {
+        return jsonResponse({ error: 'Jeton de signature manquant ou invalide.' }, 400)
       }
       await redis.del(`contract:${token}`)
-      return new Response(
-        JSON.stringify({
+      return jsonResponse(
+        {
           success: true,
           message: 'Lien de signature supprimé avec succès.',
-        }),
-        { status: 200, headers: COMMON_HEADERS },
+        },
+        200,
       )
     }
 
     const { contractNumero, data } = body
 
-    if (!data || typeof data !== 'object') {
-      return new Response(JSON.stringify({ error: 'Données du contrat manquantes ou invalides.' }), {
-        status: 400,
-        headers: COMMON_HEADERS,
-      })
+    if (!validateContractData(data)) {
+      return jsonResponse({ error: 'Données du contrat manquantes ou invalides.' }, 400)
     }
+
+    const numeroStr =
+      typeof contractNumero === 'string' && contractNumero.trim()
+        ? contractNumero.trim().slice(0, 64)
+        : (data.numero || 'SANS_NUMERO').slice(0, 64)
 
     const token = crypto.randomUUID()
     const now = new Date()
@@ -117,7 +108,7 @@ export default async function handler(request: Request) {
 
     const record: RemoteContractRecord = {
       token,
-      contractNumero: contractNumero || data.numero || 'SANS_NUMERO',
+      contractNumero: numeroStr,
       status: 'pending_photographer',
       createdAt: now.toISOString(),
       expiresAt,
@@ -130,26 +121,17 @@ export default async function handler(request: Request) {
       ex: CONTRACT_TTL_SECONDS,
     })
 
-    return new Response(
-      JSON.stringify({
+    return jsonResponse(
+      {
         success: true,
         token,
         contractNumero: record.contractNumero,
         expiresAt,
-      }),
-      {
-        status: 201,
-        headers: COMMON_HEADERS,
       },
+      201,
     )
   } catch (error) {
     console.error('[API /api/contracts/share]', error)
-    return new Response(
-      JSON.stringify({ error: 'Erreur lors de la génération du lien.' }),
-      {
-        status: 500,
-        headers: COMMON_HEADERS,
-      },
-    )
+    return jsonResponse({ error: 'Erreur lors de la génération du lien.' }, 500)
   }
 }

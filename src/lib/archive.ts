@@ -194,6 +194,17 @@ export async function exportBackup(): Promise<Blob> {
   return new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' })
 }
 
+const SAFE_IMAGE_DATA_URL_RE = /^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/
+
+function isPlainObject(v: unknown): v is Record<string, unknown> {
+  return Boolean(v) && typeof v === 'object' && !Array.isArray(v)
+}
+
+function isValidDocDataRecord(data: unknown): boolean {
+  if (!isPlainObject(data)) return false
+  return Object.values(data).every((v) => typeof v === 'string')
+}
+
 /** Fusionne une sauvegarde dans la base. Tout ou rien : en cas d'erreur, rien n'est modifié. */
 export async function importBackup(file: File): Promise<number> {
   let backup: Backup
@@ -202,8 +213,43 @@ export async function importBackup(file: File): Promise<number> {
   } catch {
     throw new Error("Ce fichier n'est pas une sauvegarde valide.")
   }
-  if ((backup?.app !== 'make-contrat' && backup?.app !== 'make-doc') || !Array.isArray(backup.documents)) {
+  if (
+    !isPlainObject(backup) ||
+    (backup?.app !== 'make-contrat' && backup?.app !== 'make-doc') ||
+    !Array.isArray(backup.documents)
+  ) {
     throw new Error("Ce fichier n'est pas une sauvegarde Make Contrat.")
+  }
+
+  for (const doc of backup.documents) {
+    if (!isPlainObject(doc) || typeof doc.templateId !== 'string' || !isValidDocDataRecord(doc.data)) {
+      throw new Error('Sauvegarde corrompue : format de document invalide.')
+    }
+  }
+  if (backup.contracts !== undefined) {
+    if (!Array.isArray(backup.contracts)) {
+      throw new Error('Sauvegarde corrompue : liste de contrats invalide.')
+    }
+    for (const c of backup.contracts) {
+      if (!isPlainObject(c) || typeof c.templateId !== 'string' || !isValidDocDataRecord(c.data)) {
+        throw new Error('Sauvegarde corrompue : format de contrat invalide.')
+      }
+    }
+  }
+  for (const asset of backup.assets ?? []) {
+    if (
+      !isPlainObject(asset) ||
+      typeof asset.hash !== 'string' ||
+      typeof asset.dataUrl !== 'string' ||
+      !SAFE_IMAGE_DATA_URL_RE.test(asset.dataUrl)
+    ) {
+      throw new Error('Sauvegarde corrompue : format d’image invalide.')
+    }
+  }
+  for (const counter of backup.counters ?? []) {
+    if (!isPlainObject(counter) || typeof counter.key !== 'string' || typeof counter.value !== 'number' || !Number.isFinite(counter.value)) {
+      throw new Error('Sauvegarde corrompue : compteur invalide.')
+    }
   }
 
   await db.transaction('rw', db.documents, db.contracts, db.counters, db.assets, async () => {

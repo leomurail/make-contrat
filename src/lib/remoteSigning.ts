@@ -9,8 +9,6 @@ export interface RemoteContractRecord {
   data: DocData
   beneficiaireSignedAt?: string
   photographeSignedAt?: string
-  photographeIp?: string
-  photographeUserAgent?: string
 }
 
 /**

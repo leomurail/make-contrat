@@ -4,9 +4,7 @@ export interface RemoteContractRecord {
   status: 'pending_photographer' | 'signed' | 'expired'
   createdAt: string
   expiresAt: string
-  data: Record<string, any>
+  data: Record<string, string>
   beneficiaireSignedAt?: string
   photographeSignedAt?: string
-  photographeIp?: string
-  photographeUserAgent?: string
 }

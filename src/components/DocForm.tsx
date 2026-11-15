@@ -325,16 +325,33 @@ function SocialsInput({ value, onChange }: { value: string; onChange: (v: string
   )
 }
 
-/** Redimensionne et compresse une image (capture d'écran ou photo) pour un PDF léger et rapide. */
-function compressImageFile(file: File): Promise<string> {
+const MAX_IMAGE_FILE_BYTES = 10 * 1024 * 1024 // 10 Mo avant compression
+const ALLOWED_IMAGE_MIME_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp'])
+
+/**
+ * Valide le type MIME et la taille, puis redimensionne et ré-encode l'image via <canvas>
+ * (élimine les métadonnées EXIF et garantit un contenu image réel).
+ */
+function compressImageFile(
+  file: File,
+  options: { maxDim?: number; format?: 'image/jpeg' | 'image/png'; quality?: number } = {},
+): Promise<string> {
+  const { maxDim = 960, format = 'image/jpeg', quality = 0.82 } = options
+
+  if (!ALLOWED_IMAGE_MIME_TYPES.has(file.type)) {
+    return Promise.reject(new Error(`Format d'image non supporté (${file.name}). Utilisez PNG, JPEG ou WebP.`))
+  }
+  if (file.size > MAX_IMAGE_FILE_BYTES) {
+    return Promise.reject(new Error(`Image trop volumineuse (${file.name}, maximum 10 Mo).`))
+  }
+
   return new Promise((resolve, reject) => {
     const reader = new FileReader()
-    reader.onerror = () => reject(reader.error)
+    reader.onerror = () => reject(reader.error ?? new Error('Impossible de lire le fichier image.'))
     reader.onload = () => {
       const img = new Image()
-      img.onerror = () => resolve(String(reader.result))
+      img.onerror = () => reject(new Error(`Fichier image invalide ou corrompu (${file.name}).`))
       img.onload = () => {
-        const maxDim = 960
         let { width, height } = img
         if (width > maxDim || height > maxDim) {
           if (width > height) {
@@ -350,13 +367,15 @@ function compressImageFile(file: File): Promise<string> {
         canvas.height = height
         const ctx = canvas.getContext('2d')
         if (!ctx) {
-          resolve(String(reader.result))
+          reject(new Error('Contexte graphique indisponible pour traiter l’image.'))
           return
         }
-        ctx.fillStyle = '#ffffff'
-        ctx.fillRect(0, 0, width, height)
+        if (format === 'image/jpeg') {
+          ctx.fillStyle = '#ffffff'
+          ctx.fillRect(0, 0, width, height)
+        }
         ctx.drawImage(img, 0, 0, width, height)
-        resolve(canvas.toDataURL('image/jpeg', 0.82))
+        resolve(format === 'image/png' ? canvas.toDataURL('image/png') : canvas.toDataURL('image/jpeg', quality))
       }
       img.src = String(reader.result)
     }
@@ -383,15 +402,22 @@ function PhotosGalleryInput({
 
   const handleFiles = async (fileList: FileList | null | undefined) => {
     if (!fileList || fileList.length === 0) return
-    const files = Array.from(fileList).filter((f) => f.type.startsWith('image/'))
-    if (files.length === 0) return
-    const newItems: PhotoItem[] = await Promise.all(
-      files.map(async (file, i) => ({
-        src: await compressImageFile(file),
-        label: cleanFileNameToLabel(file.name, items.length + i + 1),
-      })),
-    )
-    onChangeImages(serializePhotoItems([...items, ...newItems]))
+    const files = Array.from(fileList).slice(0, 20)
+    const newItems: PhotoItem[] = []
+    for (let i = 0; i < files.length; i++) {
+      try {
+        const src = await compressImageFile(files[i], { maxDim: 960, format: 'image/jpeg', quality: 0.82 })
+        newItems.push({
+          src,
+          label: cleanFileNameToLabel(files[i].name, items.length + newItems.length + 1),
+        })
+      } catch (err) {
+        alert((err as Error).message)
+      }
+    }
+    if (newItems.length > 0) {
+      onChangeImages(serializePhotoItems([...items, ...newItems]))
+    }
   }
 
   const handleDrop = async (e: DragEvent<HTMLLabelElement>) => {
@@ -516,11 +542,14 @@ function PhotosGalleryInput({
 }
 
 function ImageInput({ id, value, onChange }: { id: string; value: string; onChange: (v: string) => void }) {
-  const onFile = (file: File | undefined) => {
+  const onFile = async (file: File | undefined) => {
     if (!file) return
-    const reader = new FileReader()
-    reader.onload = () => onChange(String(reader.result))
-    reader.readAsDataURL(file)
+    try {
+      const normalized = await compressImageFile(file, { maxDim: 800, format: 'image/png' })
+      onChange(normalized)
+    } catch (err) {
+      alert((err as Error).message)
+    }
   }
 
   return (
@@ -604,14 +633,15 @@ function SignatureInput({ id, value, onChange }: { id: string; value: string; on
     onChange('')
   }
 
-  const onFile = (file: File | undefined) => {
+  const onFile = async (file: File | undefined) => {
     if (!file) return
-    const reader = new FileReader()
-    reader.onload = () => {
-      onChange(String(reader.result))
+    try {
+      const normalized = await compressImageFile(file, { maxDim: 800, format: 'image/png' })
+      onChange(normalized)
       setDrawing(false)
+    } catch (err) {
+      alert((err as Error).message)
     }
-    reader.readAsDataURL(file)
   }
 
   return (

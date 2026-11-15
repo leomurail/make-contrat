@@ -6,6 +6,7 @@ import { resolveData } from '../lib/archive'
 import { saveBlob } from '../lib/download'
 import { PdfPreview } from './PdfPreview'
 import { ErrorBoundary } from './ErrorBoundary'
+import { LegalFooter, LegalNoticeModal } from './LegalNotice'
 import type { DocData } from '../lib/types'
 
 interface Props {
@@ -25,6 +26,7 @@ export function PublicSignPage({ token }: Props) {
   const [mobileTab, setMobileTab] = useState<'preview' | 'sign'>('preview')
   const [isFullscreenPreview, setIsFullscreenPreview] = useState(false)
   const [fitWidth, setFitWidth] = useState(false)
+  const [showLegalModal, setShowLegalModal] = useState(false)
 
   // Canvas tactile de signature
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
@@ -72,11 +74,12 @@ export function PublicSignPage({ token }: Props) {
     ctx.lineJoin = 'round'
   }, [loading, success, record?.status, mobileTab])
 
-  // Gestion de la touche Échap pour le plein écran
+  // Gestion de la touche Échap pour le plein écran et la modale légale
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         setIsFullscreenPreview(false)
+        setShowLegalModal(false)
       }
     }
     window.addEventListener('keydown', handleKeyDown)
@@ -437,11 +440,21 @@ export function PublicSignPage({ token }: Props) {
                   <span className="material-symbols-rounded icon-xs">lock</span>
                   Lien sécurisé et horodaté conforme aux dispositions des articles 1366 et 1367 du Code civil.
                 </p>
+
+                <p className="public-rgpd-inline-note">
+                  Vos données (identité, coordonnées, signature) sont traitées par Léo Murail (EI — SIRET 983 299 785 00011) pour la gestion et la preuve de ce contrat. Conservation en ligne limitée à 14 jours (48 h après signature).{' '}
+                  <button type="button" className="public-footer-link" onClick={() => setShowLegalModal(true)}>
+                    Mentions légales &amp; Politique de confidentialité
+                  </button>
+                </p>
               </div>
             </div>
           ) : null}
         </div>
       </main>
+
+      <LegalFooter onOpen={() => setShowLegalModal(true)} />
+      <LegalNoticeModal open={showLegalModal} onClose={() => setShowLegalModal(false)} />
 
       {/* MODAL APERÇU IMMERSIF PLEIN ÉCRAN */}
       {isFullscreenPreview && previewDocument ? (
